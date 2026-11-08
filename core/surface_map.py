@@ -119,6 +119,33 @@ class HeightMap:
             self.points_z[index] = new_z
             self._build_interpolator()
 
+    def remove_points(self, indices: List[int]) -> int:
+        """
+        Remove os pontos nos índices informados e reconstrói o interpolador.
+
+        Índices fora do intervalo são ignorados. A ordem dos pontos restantes
+        é preservada.
+
+        Returns:
+            Quantidade de pontos efetivamente removidos.
+        """
+        if len(self.points_x) == 0:
+            return 0
+
+        valid = sorted({int(i) for i in indices
+                        if 0 <= int(i) < len(self.points_x)})
+        if not valid:
+            return 0
+
+        mask = np.ones(len(self.points_x), dtype=bool)
+        mask[valid] = False
+
+        self.points_x = self.points_x[mask]
+        self.points_y = self.points_y[mask]
+        self.points_z = self.points_z[mask]
+        self._build_interpolator()
+        return len(valid)
+
     def save_to_file(self, filepath: str, format_type: str = "mach3"):
         """
         Salva os pontos de probe no disco.
@@ -407,7 +434,8 @@ def generate_probe_gcode(x_min: float, x_max: float,
                          feed_probe: float = 50.0,
                          feed_travel: float = 1000.0,
                          controller: str = "mach3",
-                         pattern: str = "raster") -> str:
+                         pattern: str = "raster",
+                         points: Optional[List[Tuple[float, float]]] = None) -> str:
     """
     Gera o G-Code de probing para um grid nx×ny dentro da área dada.
 
@@ -426,14 +454,22 @@ def generate_probe_gcode(x_min: float, x_max: float,
         controller: "mach3" ou "grbl".
         pattern: "raster" (unidirecional), "serpentine" (zig-zag) ou
                  "circular" (anéis concêntricos inscritos na área).
+        points: Lista explícita de pontos (x, y) a sondar. Quando informada,
+                substitui os pontos gerados pelo padrão (permite excluir
+                pontos planejados antes de salvar a rotina).
 
     Returns:
         String com G-Code de probing completo.
     """
     # Lista ordenada de pontos (x, y) conforme o padrão escolhido.
-    probe_points = generate_probe_points(
-        x_min, x_max, y_min, y_max, nx, ny, pattern
-    )
+    if points is not None:
+        probe_points = [(float(x), float(y)) for x, y in points]
+        if not probe_points:
+            raise ValueError("Nenhum ponto de sondagem informado.")
+    else:
+        probe_points = generate_probe_points(
+            x_min, x_max, y_min, y_max, nx, ny, pattern
+        )
 
     last_x, last_y = probe_points[-1]
 

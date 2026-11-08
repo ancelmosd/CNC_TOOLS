@@ -137,6 +137,32 @@ class TestHeightMap(unittest.TestCase):
         self.assertEqual(hm._is_regular_grid, True)
         self.assertAlmostEqual(hm.get_z_offset(15, 15), 0.05, places=6)
 
+    def test_remove_points_ignores_invalid_and_duplicate_indices(self):
+        hm = HeightMap.from_points([
+            (0, 0, 0.1), (10, 0, 0.2),
+            (0, 10, 0.3), (10, 10, 0.4),
+        ])
+        # 1 e 3 são válidos; 3 repetido e 99/-1 devem ser ignorados.
+        removed = hm.remove_points([1, 3, 3, 99, -1])
+        self.assertEqual(removed, 2)
+        self.assertEqual(hm.points_x.tolist(), [0.0, 0.0])
+        self.assertEqual(hm.points_y.tolist(), [0.0, 10.0])
+        self.assertEqual(hm.points_z.tolist(), [0.1, 0.3])
+        self.assertFalse(hm.is_valid())
+
+    def test_remove_point_rebuilds_interpolator(self):
+        hm = HeightMap.from_points([
+            (0, 0, 0.0), (10, 0, 1.0),
+            (0, 10, 2.0), (10, 10, 3.0),
+        ])
+        self.assertTrue(hm._is_regular_grid)
+
+        hm.remove_points([3])
+        self.assertEqual(len(hm.points_x), 3)
+        self.assertFalse(hm._is_regular_grid)
+        # Plano z = 0.1x + 0.2y permanece válido com os 3 pontos restantes.
+        self.assertAlmostEqual(hm.get_z_offset(2, 2), 0.6, places=6)
+
 
 class TestSurfaceMap(unittest.TestCase):
     def test_compensates_modal_z_moves(self):
@@ -224,6 +250,26 @@ class TestSurfaceMap(unittest.TestCase):
         self.assertIn("G38.2", gcode)
         self.assertGreater(gcode.count("G38.2"), 8)
         self.assertIn("Padrão: circular", gcode)
+
+    def test_generate_probe_uses_explicit_points(self):
+        points = [(0, 0), (10, 5), (20, -5)]
+        gcode = generate_probe_gcode(
+            -50, 50, -30, 30, nx=8, ny=5,
+            controller="mach3", pattern="circular", points=points,
+        )
+        coords = re.findall(r"G0 X(-?\d+\.?\d*)Y(-?\d+\.?\d*)", gcode)
+        # 3 pontos + retorno final ao último ponto.
+        self.assertEqual(len(coords), 4)
+        self.assertEqual(gcode.count("G31"), 3)
+        self.assertEqual(coords[:3], [
+            ("0.000", "0.000"), ("10.000", "5.000"), ("20.000", "-5.000"),
+        ])
+
+    def test_generate_probe_rejects_empty_explicit_points(self):
+        with self.assertRaises(ValueError):
+            generate_probe_gcode(
+                -50, 50, -30, 30, nx=8, ny=5, points=[],
+            )
 
 
 class TestSplitter(unittest.TestCase):

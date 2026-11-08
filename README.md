@@ -10,7 +10,7 @@ Desenvolvido em **Python + PySide6 (Qt6)** com visualizador 3D acelerado por har
 | # | Funcionalidade | Descrição |
 |---|---|---|
 | 1 | 📊 Estatísticas & Simulação | Estimativa de tempo de usinagem, distâncias de corte/rápido, playback animado com fresa 3D |
-| 2 | 🗺️ Surface Mapping | Auto-limita X e Y aos limites do G-Code, interpolação Z e gerador Mach3/GRBL com padrões Raster, Serpentina e Circular (anéis concêntricos) |
+| 2 | 🗺️ Surface Mapping | Auto-limita X e Y aos limites do G-Code, edição/exclusão de pontos medidos e do padrão de varredura, interpolação Z e gerador Mach3/GRBL com padrões Raster, Serpentina e Circular (anéis concêntricos) |
 | 3 | 🔄 4º Eixo | Converte G-Code plano XY para eixo rotativo A com compensação de Z no centro/superfície |
 | 4 | ↔️ Transformações | Escala, translação, espelhamento e rotação do G-Code |
 | 5 | ✂️ Dividir | Divide arquivos por linhas, troca de ferramenta (M6) ou camada Z |

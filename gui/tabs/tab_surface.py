@@ -13,16 +13,19 @@ Funcionalidades:
 """
 
 import os
-from typing import Callable, Optional
+from typing import Callable, List, Optional, Tuple
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
-    QLabel, QLineEdit, QPushButton, QComboBox,
+    QLabel, QLineEdit, QPushButton, QComboBox, QCheckBox,
     QFileDialog, QMessageBox, QGroupBox, QScrollArea, QFrame,
-    QTableWidget, QTableWidgetItem, QHeaderView
+    QTableWidget, QTableWidgetItem, QHeaderView, QAbstractItemView
 )
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QKeySequence, QShortcut
 
-from core.surface_map import HeightMap, apply_surface_map, generate_probe_gcode
+from core.surface_map import (
+    HeightMap, apply_surface_map, generate_probe_gcode, generate_probe_points,
+)
 from core.gcode_parser import get_bounding_box
 
 
@@ -40,6 +43,12 @@ class SurfaceTab(QWidget):
         self._selected_idx: Optional[int] = None
         self._is_updating_table = False
 
+        # Pontos planejados do padrão de varredura (permite exclusões)
+        self._pattern_points: List[Tuple[float, float]] = []
+        self._pattern_total = 0
+        self._pattern_signature = None
+        self._selected_pattern_idx: Optional[int] = None
+
         self._setup_ui()
         if self._preview is not None:
             self._connect_preview_signals()
@@ -52,6 +61,17 @@ class SurfaceTab(QWidget):
     def _connect_preview_signals(self):
         try:
             self._preview.point_selected.connect(self._on_viewer_point_selected)
+        except Exception:
+            pass
+        try:
+            self._preview.pattern_point_selected.connect(
+                self._on_pattern_point_selected
+            )
+        except Exception:
+            pass
+        try:
+            target = "pattern" if self._chk_pick_pattern.isChecked() else "measured"
+            self._preview.set_pick_target(target)
         except Exception:
             pass
 
@@ -139,6 +159,7 @@ class SurfaceTab(QWidget):
             "Em áreas quadradas gera círculos perfeitos; os pontos ficam\n"
             "sempre dentro dos limites X/Y informados."
         )
+        self._cmb_pattern.currentIndexChanged.connect(self._on_grid_param_changed)
         grid_params.addWidget(self._cmb_pattern, 1, 1)
 
         grid_params.addWidget(QLabel("Grid X (pontos):"), 2, 0)
@@ -169,6 +190,39 @@ class SurfaceTab(QWidget):
         grid_params.addWidget(self._feed_travel_edit, 7, 1)
 
         grp_probe_layout.addLayout(grid_params)
+
+        self._chk_pick_pattern = QCheckBox("Selecionar pontos do padrão no 3D")
+        self._chk_pick_pattern.setToolTip(
+            "Quando marcado, o clique no visualizador 3D seleciona um ponto "
+            "amarelo do padrão de varredura (em vez de um ponto medido da "
+            "tabela). Use para excluir pontos que não devem ser sondados."
+        )
+        self._chk_pick_pattern.toggled.connect(self._on_pick_target_changed)
+        grp_probe_layout.addWidget(self._chk_pick_pattern)
+
+        self._lbl_pattern_status = QLabel("")
+        self._lbl_pattern_status.setStyleSheet("color: #b0bec5; font-size: 11px;")
+        self._lbl_pattern_status.setWordWrap(True)
+        grp_probe_layout.addWidget(self._lbl_pattern_status)
+
+        h_pattern_btns = QHBoxLayout()
+        h_pattern_btns.setSpacing(4)
+
+        self._btn_delete_pattern = QPushButton("🗑️ Excluir Ponto do Padrão")
+        self._btn_delete_pattern.setStyleSheet("background-color: #b71c1c; padding: 6px;")
+        self._btn_delete_pattern.setEnabled(False)
+        self._btn_delete_pattern.clicked.connect(self._delete_pattern_point)
+        h_pattern_btns.addWidget(self._btn_delete_pattern)
+
+        self._btn_restore_pattern = QPushButton("↺ Restaurar Padrão")
+        self._btn_restore_pattern.setStyleSheet("background-color: #37474f; padding: 6px;")
+        self._btn_restore_pattern.setToolTip(
+            "Recria todos os pontos do padrão de varredura, desfazendo as exclusões."
+        )
+        self._btn_restore_pattern.clicked.connect(self._restore_pattern)
+        h_pattern_btns.addWidget(self._btn_restore_pattern)
+
+        grp_probe_layout.addLayout(h_pattern_btns)
 
         self._btn_generate_probe = QPushButton("📄 Gerar Rotina de Probing")
         self._btn_generate_probe.setStyleSheet("background-color: #1565c0; font-weight: bold; padding: 6px;")
@@ -259,9 +313,33 @@ class SurfaceTab(QWidget):
         self._table.setHorizontalHeaderLabels(["#", "X (mm)", "Y (mm)", "Z (mm)"])
         self._table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self._table.setMaximumHeight(180)
+        self._table.setSelectionBehavior(QAbstractItemView.SelectRows)
+        self._table.setSelectionMode(QAbstractItemView.ExtendedSelection)
         self._table.itemSelectionChanged.connect(self._on_table_selection_changed)
         self._table.itemChanged.connect(self._on_table_item_changed)
         grp_table_layout.addWidget(self._table)
+
+        lbl_table_hint = QLabel(
+            "💡 Use Ctrl+clique ou Shift+clique para selecionar vários pontos. "
+            "Pressione Delete para excluir os selecionados."
+        )
+        lbl_table_hint.setStyleSheet("color: #9e9e9e; font-size: 11px;")
+        lbl_table_hint.setWordWrap(True)
+        grp_table_layout.addWidget(lbl_table_hint)
+
+        self._btn_delete_points = QPushButton("🗑️ Excluir Pontos Selecionados")
+        self._btn_delete_points.setStyleSheet("background-color: #b71c1c; font-weight: bold; padding: 6px;")
+        self._btn_delete_points.setToolTip(
+            "Remove da tabela, do heightmap e da visualização 3D os pontos "
+            "selecionados. A exclusão vale para a exportação e para a "
+            "compensação Z aplicada ao G-Code."
+        )
+        self._btn_delete_points.clicked.connect(self._delete_selected_points)
+        grp_table_layout.addWidget(self._btn_delete_points)
+
+        self._shortcut_delete = QShortcut(QKeySequence.Delete, self._table)
+        self._shortcut_delete.setContext(Qt.WidgetWithChildrenShortcut)
+        self._shortcut_delete.activated.connect(self._delete_selected_points)
 
         layout.addWidget(grp_table)
 
@@ -316,23 +394,119 @@ class SurfaceTab(QWidget):
     def _on_grid_param_changed(self):
         self._update_preview_probe_grid()
 
+    def _pattern_params(self):
+        """Lê os parâmetros atuais do padrão ou retorna None se inválidos."""
+        try:
+            return (
+                float(self._xmin_edit.text()),
+                float(self._xmax_edit.text()),
+                float(self._ymin_edit.text()),
+                float(self._ymax_edit.text()),
+                max(2, int(self._nx_edit.text())),
+                max(2, int(self._ny_edit.text())),
+                self._current_pattern(),
+            )
+        except ValueError:
+            return None
+
+    def _ensure_pattern_points(self):
+        """Gera/atualiza os pontos do padrão, preservando exclusões."""
+        params = self._pattern_params()
+        if params is None:
+            return
+
+        if params != self._pattern_signature:
+            xmin, xmax, ymin, ymax, nx, ny, pattern = params
+            self._pattern_points = generate_probe_points(
+                xmin, xmax, ymin, ymax, nx, ny, pattern
+            )
+            self._pattern_total = len(self._pattern_points)
+            self._pattern_signature = params
+            self._selected_pattern_idx = None
+            self._btn_delete_pattern.setEnabled(False)
+
+        self._update_pattern_status()
+
+    def _update_pattern_status(self):
+        """Mostra a quantidade de pontos ativos do padrão no painel."""
+        if not self._pattern_points:
+            self._lbl_pattern_status.setText(
+                "Padrão de varredura: nenhum ponto ativo."
+            )
+            return
+
+        text = (f"Padrão de varredura: {len(self._pattern_points)} de "
+                f"{self._pattern_total} pontos ativos")
+        idx = self._selected_pattern_idx
+        if idx is not None and 0 <= idx < len(self._pattern_points):
+            x, y = self._pattern_points[idx]
+            text += f" — selecionado: #{idx + 1} (X: {x:.3f}, Y: {y:.3f})"
+        self._lbl_pattern_status.setText(text)
+
+    def _on_pick_target_changed(self, active: bool):
+        """Alterna o alvo do clique 3D entre pontos medidos e do padrão."""
+        if self._preview is not None:
+            try:
+                self._preview.set_pick_target("pattern" if active else "measured")
+            except Exception:
+                pass
+
+        if not active:
+            self._selected_pattern_idx = None
+            self._btn_delete_pattern.setEnabled(False)
+            self._update_pattern_status()
+
+    def _on_pattern_point_selected(self, index: int, x: float, y: float):
+        """Recebe o ponto do padrão selecionado no visualizador 3D."""
+        if index < 0 or index >= len(self._pattern_points):
+            return
+        self._selected_pattern_idx = index
+        self._btn_delete_pattern.setEnabled(True)
+        self._update_pattern_status()
+
+    def _delete_pattern_point(self):
+        """Remove do padrão o ponto planejado atualmente selecionado."""
+        idx = self._selected_pattern_idx
+        if idx is None or idx < 0 or idx >= len(self._pattern_points):
+            QMessageBox.information(
+                self, "Aviso",
+                "Marque 'Selecionar pontos do padrão no 3D', clique em um "
+                "ponto amarelo e depois exclua."
+            )
+            return
+
+        del self._pattern_points[idx]
+        self._selected_pattern_idx = None
+        self._btn_delete_pattern.setEnabled(False)
+        self._update_pattern_status()
+        self._update_preview_probe_grid()
+
+    def _restore_pattern(self):
+        """Recria todos os pontos do padrão, desfazendo as exclusões."""
+        self._pattern_signature = None
+        self._selected_pattern_idx = None
+        self._btn_delete_pattern.setEnabled(False)
+        self._update_preview_probe_grid()
+
     def _update_preview_probe_grid(self):
+        self._ensure_pattern_points()
+
         if self._preview is None:
             return
 
+        params = self._pattern_params()
+        if params is None:
+            return
+
         try:
-            xmin = float(self._xmin_edit.text())
-            xmax = float(self._xmax_edit.text())
-            ymin = float(self._ymin_edit.text())
-            ymax = float(self._ymax_edit.text())
-            nx = max(2, int(self._nx_edit.text()))
-            ny = max(2, int(self._ny_edit.text()))
+            xmin, xmax, ymin, ymax, nx, ny, pattern = params
             safe_z = self._get_float(self._safe_z_edit, 5.0)
             probe_z = self._get_float(self._probe_z_edit, -5.0)
 
             self._preview.set_probe_grid(
                 x_min=xmin, x_max=xmax, y_min=ymin, y_max=ymax,
-                nx=nx, ny=ny, safe_z=safe_z, probe_z=probe_z
+                nx=nx, ny=ny, safe_z=safe_z, probe_z=probe_z,
+                pattern=pattern, points=self._pattern_points
             )
         except Exception:
             pass
@@ -361,29 +535,11 @@ class SurfaceTab(QWidget):
             self._lbl_points_path.setText(f"📄 {os.path.basename(path)}")
             self._lbl_points_path.setStyleSheet("color: #81c784; font-weight: bold;")
 
-            bounds = self._heightmap.bounds
             n = len(self._heightmap.points_x)
-            z_min = float(self._heightmap.points_z.min())
-            z_max = float(self._heightmap.points_z.max())
 
-            self._lbl_points_info.setText(
-                f"✅ {n} pontos carregados!\n"
-                f"X: {bounds[0]:.2f} → {bounds[1]:.2f} mm\n"
-                f"Y: {bounds[2]:.2f} → {bounds[3]:.2f} mm\n"
-                f"Z: {z_min:.3f} → {z_max:.3f} mm (ΔZ: {z_max - z_min:.3f} mm)"
-            )
-
-            # Preencher tabela
+            # Preencher tabela, resumo e visualizador 3D
             self._populate_table()
-
-            # Enviar para o PyVista 3D
-            if self._preview is not None:
-                pts_list = list(zip(
-                    self._heightmap.points_x,
-                    self._heightmap.points_y,
-                    self._heightmap.points_z
-                ))
-                self._preview.set_measured_points(pts_list)
+            self._refresh_points_summary()
 
             QMessageBox.information(self, "Sucesso",
                 f"{n} pontos de probe importados com sucesso!\n"
@@ -424,6 +580,91 @@ class SurfaceTab(QWidget):
             self._table.setItem(i, 3, item_z)
 
         self._is_updating_table = False
+
+    def _refresh_points_summary(self):
+        """Atualiza o resumo dos pontos e a visualização 3D após edições."""
+        if self._heightmap is None or len(self._heightmap.points_x) == 0:
+            self._lbl_points_info.setText("Nenhum ponto de probe carregado.")
+            if self._preview is not None:
+                self._preview.set_measured_points([])
+            return
+
+        bounds = self._heightmap.bounds
+        n = len(self._heightmap.points_x)
+        z_min = float(self._heightmap.points_z.min())
+        z_max = float(self._heightmap.points_z.max())
+
+        self._lbl_points_info.setText(
+            f"✅ {n} pontos carregados!\n"
+            f"X: {bounds[0]:.2f} → {bounds[1]:.2f} mm\n"
+            f"Y: {bounds[2]:.2f} → {bounds[3]:.2f} mm\n"
+            f"Z: {z_min:.3f} → {z_max:.3f} mm (ΔZ: {z_max - z_min:.3f} mm)"
+        )
+
+        if self._preview is not None:
+            pts_list = list(zip(
+                self._heightmap.points_x,
+                self._heightmap.points_y,
+                self._heightmap.points_z
+            ))
+            self._preview.set_measured_points(pts_list)
+
+    def _delete_selected_points(self):
+        """Exclui da tabela, do heightmap e do 3D os pontos selecionados."""
+        if self._heightmap is None or len(self._heightmap.points_x) == 0:
+            QMessageBox.information(self, "Aviso", "Nenhum ponto de probe carregado.")
+            return
+
+        rows = sorted({
+            index.row()
+            for index in self._table.selectionModel().selectedRows()
+        })
+        if not rows and self._selected_idx is not None:
+            rows = [self._selected_idx]
+        if not rows:
+            QMessageBox.information(
+                self, "Aviso",
+                "Selecione um ou mais pontos na tabela "
+                "(Ctrl+clique ou Shift+clique) para excluir."
+            )
+            return
+
+        n = len(rows)
+        answer = QMessageBox.question(
+            self, "Excluir Pontos",
+            f"Excluir {n} ponto(s) selecionado(s)?\n\n"
+            "A exclusão afeta a exportação dos pontos e a compensação Z "
+            "aplicada ao G-Code.",
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No
+        )
+        if answer != QMessageBox.Yes:
+            return
+
+        removed = self._heightmap.remove_points(rows)
+        if removed == 0:
+            return
+
+        # Limpar o painel de edição do ponto selecionado
+        self._selected_idx = None
+        self._lbl_sel_name.setText("Nenhum ponto selecionado")
+        self._lbl_sel_xy.setText("X: --  |  Y: --")
+        self._edit_sel_z.setText("0.0000")
+
+        self._populate_table()
+        self._refresh_points_summary()
+
+        remaining = len(self._heightmap.points_x)
+        if self._heightmap.is_valid():
+            QMessageBox.information(
+                self, "Pontos Excluídos",
+                f"{removed} ponto(s) removido(s). Restam {remaining} ponto(s)."
+            )
+        else:
+            QMessageBox.warning(
+                self, "Pontos Insuficientes",
+                f"{removed} ponto(s) removido(s). Restam {remaining} ponto(s);\n"
+                "são necessários pelo menos 3 pontos para aplicar a compensação."
+            )
 
     # ------------------------------------------------------------------
     # Seleção e Edição Manual de Pontos
@@ -571,20 +812,24 @@ class SurfaceTab(QWidget):
         ctrl_choice = self._cmb_controller.currentText()
         controller = "mach3" if "Mach" in ctrl_choice else "grbl"
 
-        pattern_choice = self._cmb_pattern.currentText()
-        if "Raster" in pattern_choice:
-            pattern = "raster"
-        elif "Serpentina" in pattern_choice:
-            pattern = "serpentine"
-        else:
-            pattern = "circular"
+        pattern = self._current_pattern()
+
+        self._ensure_pattern_points()
+        if not self._pattern_points:
+            QMessageBox.warning(
+                self, "Aviso",
+                "O padrão de varredura não possui pontos ativos. "
+                "Use 'Restaurar Padrão' ou ajuste os parâmetros."
+            )
+            return
 
         try:
             gcode_str = generate_probe_gcode(
                 x_min=xmin, x_max=xmax, y_min=ymin, y_max=ymax,
                 nx=nx, ny=ny, safe_z=safe_z, probe_z=probe_z,
                 feed_probe=feed_probe, feed_travel=feed_travel,
-                controller=controller, pattern=pattern
+                controller=controller, pattern=pattern,
+                points=self._pattern_points
             )
         except Exception as e:
             QMessageBox.critical(self, "Erro", str(e))
@@ -625,6 +870,15 @@ class SurfaceTab(QWidget):
     # ------------------------------------------------------------------
     # Auxiliares
     # ------------------------------------------------------------------
+
+    def _current_pattern(self) -> str:
+        """Converte a opção da interface no padrão aceito pelo núcleo."""
+        choice = self._cmb_pattern.currentText()
+        if "Raster" in choice:
+            return "raster"
+        if "Serpentina" in choice:
+            return "serpentine"
+        return "circular"
 
     def _get_float(self, edit: QLineEdit, default=0.0):
         try:

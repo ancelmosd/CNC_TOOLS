@@ -23,6 +23,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, Signal
 
 from core.gcode_parser import GCodeBlock, get_bounding_box_3d
+from core.surface_map import generate_probe_points
 from core.rotary_wrap import (
     extract_rotary_trajectories_3d,
     rotary_config_from_blocks,
@@ -33,8 +34,10 @@ from core.rotary_wrap import (
 class PyVistaGCodeViewer(QWidget):
     """Widget de visualização 3D de G-Code e Probing acelerado por GPU com seleção interativa."""
 
-    # Sinal emitido ao clicar em um ponto ou selecioná-lo: (index, x, y, z)
+    # Sinal emitido ao clicar em um ponto medido: (index, x, y, z)
     point_selected = Signal(int, float, float, float)
+    # Sinal emitido ao clicar em um ponto planejado do padrão: (index, x, y)
+    pattern_point_selected = Signal(int, float, float)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -46,6 +49,7 @@ class PyVistaGCodeViewer(QWidget):
         self._poly_g1: Optional[pv.PolyData] = None
         self._poly_g0: Optional[pv.PolyData] = None
         self._poly_probe_grid: Optional[pv.PolyData] = None
+        self._poly_probe_pts: Optional[pv.PolyData] = None
         self._poly_measured: Optional[pv.PolyData] = None
         self._poly_surface: Optional[pv.PolyData] = None
         self._poly_cylinder: Optional[pv.PolyData] = None
@@ -54,6 +58,8 @@ class PyVistaGCodeViewer(QWidget):
         # Ponto atualmente selecionado
         self._selected_index: Optional[int] = None
         self._picking_enabled = False
+        # Alvo do clique 3D: "measured" (tabela) ou "pattern" (padrão)
+        self._pick_target = "measured"
 
         # Estado do 4º eixo / simulação
         self._rotary_active = False
@@ -250,12 +256,30 @@ class PyVistaGCodeViewer(QWidget):
             self._picking_enabled = False
             self._btn_pick_mode.setStyleSheet("background-color: #37474f;")
 
+    def set_pick_target(self, target: str):
+        """Define se o clique 3D seleciona pontos medidos ou do padrão."""
+        self._pick_target = "pattern" if target == "pattern" else "measured"
+
     def _on_point_picked(self, point):
         """Chamado pelo PyVista quando o usuário clica sobre um ponto no 3D."""
+        picked_xyz = np.array(point, dtype=np.float32)
+
+        if self._pick_target == "pattern":
+            if self._poly_probe_pts is None or len(self._poly_probe_pts.points) == 0:
+                return
+            pts = self._poly_probe_pts.points
+            closest_idx = int(np.argmin(np.linalg.norm(pts - picked_xyz, axis=1)))
+            pt = pts[closest_idx]
+            x, y = float(pt[0]), float(pt[1])
+            self._draw_highlight_marker(
+                closest_idx, x, y, 0.0, label_prefix="Padrão"
+            )
+            self.pattern_point_selected.emit(closest_idx, x, y)
+            return
+
         if self._poly_measured is None or len(self._poly_measured.points) == 0:
             return
 
-        picked_xyz = np.array(point, dtype=np.float32)
         pts = self._poly_measured.points
 
         # Encontrar o ponto medido mais próximo
@@ -280,7 +304,8 @@ class PyVistaGCodeViewer(QWidget):
         # Emitir sinal Qt para a aba de Superfície
         self.point_selected.emit(index, x, y, z)
 
-    def _draw_highlight_marker(self, index: int, x: float, y: float, z: float):
+    def _draw_highlight_marker(self, index: int, x: float, y: float, z: float,
+                               label_prefix: str = "Ponto"):
         """Desenha anel e esfera branca no ponto selecionado com etiqueta de cota Z."""
         self.plotter.remove_actor("selected_probe_highlight", reset_camera=False)
         self.plotter.remove_actor("selected_probe_label", reset_camera=False)
@@ -296,7 +321,7 @@ class PyVistaGCodeViewer(QWidget):
             reset_camera=False
         )
 
-        label_txt = [f"Ponto #{index + 1}\nZ: {z:+.4f} mm"]
+        label_txt = [f"{label_prefix} #{index + 1}\nZ: {z:+.4f} mm"]
         self.plotter.add_point_labels(
             highlight_poly,
             label_txt,
@@ -514,36 +539,62 @@ class PyVistaGCodeViewer(QWidget):
     # ------------------------------------------------------------------
 
     def set_probe_grid(self, x_min: float, x_max: float, y_min: float, y_max: float,
-                       nx: int, ny: int, safe_z: float = 5.0, probe_z: float = -5.0):
-        """Define a grade planejada de probe."""
+                       nx: int, ny: int, safe_z: float = 5.0, probe_z: float = -5.0,
+                       pattern: str = "raster",
+                       points: Optional[List[Tuple[float, float]]] = None):
+        """Define a grade/trajetória planejada de probe conforme o padrão."""
         if nx <= 0 or ny <= 0 or (x_min == x_max and y_min == y_max):
             self._poly_probe_grid = None
+            self._poly_probe_pts = None
             self._refresh_plotter()
             return
 
-        xs = np.linspace(x_min, x_max, nx)
-        ys = np.linspace(y_min, y_max, ny)
+        if points is not None:
+            # Pontos explícitos (permite excluir pontos do padrão).
+            probe_pts = [(float(x), float(y)) for x, y in points]
+            pts = [[x, y, 0.0] for x, y in probe_pts]
+            cells = []
+            for i in range(len(pts) - 1):
+                cells.extend([2, i, i + 1])
+        elif pattern == "circular":
+            # Desenha a trajetória real (centro + anéis) na ordem de sondagem.
+            probe_pts = generate_probe_points(
+                x_min, x_max, y_min, y_max, nx, ny, pattern
+            )
+            pts = [[x, y, 0.0] for x, y in probe_pts]
+            cells = []
+            for i in range(len(pts) - 1):
+                cells.extend([2, i, i + 1])
+        else:
+            xs = np.linspace(x_min, x_max, nx)
+            ys = np.linspace(y_min, y_max, ny)
 
-        pts = []
-        cells = []
-        idx = 0
+            pts = []
+            cells = []
+            idx = 0
 
-        for y in ys:
-            pts.extend([[x_min, y, 0.0], [x_max, y, 0.0]])
-            cells.extend([2, idx, idx + 1])
-            idx += 2
+            for y in ys:
+                pts.extend([[x_min, y, 0.0], [x_max, y, 0.0]])
+                cells.extend([2, idx, idx + 1])
+                idx += 2
 
-        for x in xs:
-            pts.extend([[x, y_min, 0.0], [x, y_max, 0.0]])
-            cells.extend([2, idx, idx + 1])
-            idx += 2
-
-        self._poly_probe_grid = pv.PolyData(np.array(pts, dtype=np.float32), lines=np.array(cells))
-
-        touch_pts = []
-        for y in ys:
             for x in xs:
-                touch_pts.append([x, y, 0.0])
+                pts.extend([[x, y_min, 0.0], [x, y_max, 0.0]])
+                cells.extend([2, idx, idx + 1])
+                idx += 2
+
+            probe_pts = [(x, y) for y in ys for x in xs]
+
+        if not probe_pts:
+            self._poly_probe_grid = None
+            self._poly_probe_pts = None
+            self._refresh_plotter()
+            return
+
+        lines = np.array(cells) if cells else None
+        self._poly_probe_grid = pv.PolyData(np.array(pts, dtype=np.float32), lines=lines)
+
+        touch_pts = [[float(x), float(y), 0.0] for x, y in probe_pts]
         self._poly_probe_pts = pv.PolyData(np.array(touch_pts, dtype=np.float32))
 
         self._refresh_plotter()
@@ -937,6 +988,7 @@ class PyVistaGCodeViewer(QWidget):
         self._poly_g1 = None
         self._poly_g0 = None
         self._poly_probe_grid = None
+        self._poly_probe_pts = None
         self._poly_measured = None
         self._poly_surface = None
         self._poly_cylinder = None
