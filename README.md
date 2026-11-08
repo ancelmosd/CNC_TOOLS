@@ -47,6 +47,38 @@ python -m unittest discover -s tests -v
 
 ---
 
+## Gerar Executável (Windows)
+
+Pré-requisito: Windows 64-bit com Python 3.10+ instalado.
+
+**Opção rápida (duplo clique):** execute `build_exe.bat`. Ele instala as
+dependências, o PyInstaller e gera o executável automaticamente.
+
+**Ou manualmente:**
+
+```bash
+pip install -r requirements.txt
+pip install -r requirements-build.txt
+pyinstaller --noconfirm --clean GCodeTools.spec
+```
+
+O resultado fica em:
+
+```
+dist\GCodeTools\GCodeTools.exe
+```
+
+> ⚠️ Distribua a pasta `dist\GCodeTools` **inteira** (modo onedir), pois ela
+> contém as DLLs do Qt/PySide6 e do VTK/PyVista. O `.exe` sozinho não funciona.
+>
+> O executável é gerado para a mesma plataforma do build (Windows 64-bit).
+> O tamanho final fica em torno de **1 GB**, devido às bibliotecas do Qt e do VTK.
+>
+> Na primeira execução o Windows SmartScreen pode exibir um aviso por o
+> executável não ter assinatura digital; use "Mais informações → Executar assim mesmo".
+
+---
+
 ## Estrutura do Projeto
 
 ```

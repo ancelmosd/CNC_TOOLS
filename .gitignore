@@ -9,6 +9,11 @@ env/
 # Cópias/releases locais antigas
 v00/
 
+# Artefatos de build do PyInstaller
+build/
+dist/
+*.manifest
+
 # IDE / Sistema operacional
 .vscode/
 .idea/
