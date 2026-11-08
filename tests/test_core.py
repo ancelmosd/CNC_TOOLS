@@ -7,13 +7,14 @@ Execute na raiz do projeto:
 
 import math
 import os
+import re
 import tempfile
 import unittest
 
 from core.gcode_parser import (
     parse_line, parse_file, write_file, get_bounding_box, get_bounding_box_3d,
 )
-from core.surface_map import HeightMap, apply_surface_map
+from core.surface_map import HeightMap, apply_surface_map, generate_probe_gcode
 from core.splitter import split_by_layer
 from core.transforms import rotate, translate, scale, mirror_x
 from core.rotary_wrap import (
@@ -183,6 +184,46 @@ class TestSurfaceMap(unittest.TestCase):
         # Movimentos reais continuam sendo compensados normalmente.
         self.assertAlmostEqual(result[1].z, 5.1997, places=4)
         self.assertAlmostEqual(result[2].z, -0.8003, places=4)
+
+    def test_generate_probe_raster_point_count(self):
+        gcode = generate_probe_gcode(
+            -50, 50, -30, 30, nx=8, ny=5,
+            controller="mach3", pattern="raster",
+        )
+        # 8x5 pontos + retorno final ao último ponto.
+        coords = re.findall(r"G0 X(-?\d+\.?\d*)Y(-?\d+\.?\d*)", gcode)
+        self.assertEqual(len(coords), 8 * 5 + 1)
+        self.assertEqual(gcode.count("G31"), 8 * 5)
+
+    def test_generate_probe_circular_stays_within_bounds(self):
+        gcode = generate_probe_gcode(
+            -50, 50, -30, 30, nx=8, ny=5,
+            controller="mach3", pattern="circular",
+        )
+        coords = re.findall(r"G0 X(-?\d+\.?\d*)Y(-?\d+\.?\d*)", gcode)
+        # Centro + anéis + retorno final.
+        self.assertGreater(len(coords), 10)
+        self.assertGreater(gcode.count("G31"), 8)
+
+        for xs, ys in coords:
+            x, y = float(xs), float(ys)
+            self.assertGreaterEqual(x, -50.0001)
+            self.assertLessEqual(x, 50.0001)
+            self.assertGreaterEqual(y, -30.0001)
+            self.assertLessEqual(y, 30.0001)
+
+        # O centro da área deve estar entre os pontos sondados.
+        self.assertTrue(any(abs(float(xs)) < 1e-6 and abs(float(ys)) < 1e-6
+                            for xs, ys in coords))
+
+    def test_generate_probe_circular_grbl(self):
+        gcode = generate_probe_gcode(
+            -50, 50, -50, 50, nx=8, ny=5,
+            controller="grbl", pattern="circular",
+        )
+        self.assertIn("G38.2", gcode)
+        self.assertGreater(gcode.count("G38.2"), 8)
+        self.assertIn("Padrão: circular", gcode)
 
 
 class TestSplitter(unittest.TestCase):

@@ -129,7 +129,16 @@ class SurfaceTab(QWidget):
 
         grid_params.addWidget(QLabel("Padrão de Varredura:"), 1, 0)
         self._cmb_pattern = QComboBox()
-        self._cmb_pattern.addItems(["Raster (Unidirecional)", "Serpentina (Zig-Zag)"])
+        self._cmb_pattern.addItems([
+            "Raster (Unidirecional)",
+            "Serpentina (Zig-Zag)",
+            "Circular (Anéis Concêntricos)",
+        ])
+        self._cmb_pattern.setToolTip(
+            "Circular: anéis concêntricos inscritos na área delimitada.\n"
+            "Em áreas quadradas gera círculos perfeitos; os pontos ficam\n"
+            "sempre dentro dos limites X/Y informados."
+        )
         grid_params.addWidget(self._cmb_pattern, 1, 1)
 
         grid_params.addWidget(QLabel("Grid X (pontos):"), 2, 0)
@@ -563,7 +572,12 @@ class SurfaceTab(QWidget):
         controller = "mach3" if "Mach" in ctrl_choice else "grbl"
 
         pattern_choice = self._cmb_pattern.currentText()
-        pattern = "raster" if "Raster" in pattern_choice else "serpentine"
+        if "Raster" in pattern_choice:
+            pattern = "raster"
+        elif "Serpentina" in pattern_choice:
+            pattern = "serpentine"
+        else:
+            pattern = "circular"
 
         try:
             gcode_str = generate_probe_gcode(

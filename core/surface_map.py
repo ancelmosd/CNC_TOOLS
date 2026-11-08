@@ -305,6 +305,100 @@ def apply_surface_map(blocks: List[GCodeBlock],
 # Gerador de G-Code de probing
 # ---------------------------------------------------------------------------
 
+def _circular_probe_points(x_min: float, x_max: float,
+                           y_min: float, y_max: float,
+                           nx: int, ny: int) -> List[Tuple[float, float]]:
+    """
+    Gera pontos de sondagem em anéis concêntricos (varredura circular).
+
+    Os anéis são elipses inscritas na área delimitada, de modo que todos os
+    pontos ficam dentro dos limites informados. Em áreas quadradas os anéis
+    são círculos perfeitos.
+
+    A densidade (nx, ny) é convertida em espaçamento entre anéis e entre
+    pontos de cada anel, mantendo amostragem uniforme ao longo do perímetro.
+    """
+    width = x_max - x_min
+    height = y_max - y_min
+    if width <= 0 or height <= 0:
+        return [(float(x_min), float(y_min))]
+
+    cx = (x_min + x_max) / 2.0
+    cy = (y_min + y_max) / 2.0
+    half_w = width / 2.0
+    half_h = height / 2.0
+
+    # Espaçamento equivalente ao grid informado (mesma densidade do raster).
+    spacing = min(width / max(1, nx - 1), height / max(1, ny - 1))
+    spacing = max(1e-3, spacing)
+
+    n_rings = max(1, int(math.ceil(max(half_w, half_h) / spacing)))
+
+    points: List[Tuple[float, float]] = [(cx, cy)]
+    seen = {(round(cx, 4), round(cy, 4))}
+
+    for i in range(1, n_rings + 1):
+        t = i / float(n_rings)
+        rx = half_w * t
+        ry = half_h * t
+
+        # Perímetro aproximado da elipse (Ramanujan) para densidade uniforme.
+        perim = math.pi * (
+            3.0 * (rx + ry)
+            - math.sqrt((3.0 * rx + ry) * (rx + 3.0 * ry))
+        )
+        n_pts = max(8, int(math.ceil(perim / spacing)))
+
+        # Alterna o offset angular entre anéis para melhorar a cobertura.
+        offset = (math.pi / n_pts) if (i % 2 == 0) else 0.0
+
+        for k in range(n_pts):
+            ang = (2.0 * math.pi * k / n_pts) + offset
+            x = cx + rx * math.cos(ang)
+            y = cy + ry * math.sin(ang)
+
+            key = (round(x, 4), round(y, 4))
+            if key in seen:
+                continue
+            seen.add(key)
+            points.append((x, y))
+
+    return points
+
+
+def generate_probe_points(x_min: float, x_max: float,
+                          y_min: float, y_max: float,
+                          nx: int, ny: int,
+                          pattern: str = "raster") -> List[Tuple[float, float]]:
+    """
+    Gera a lista ordenada de pontos (x, y) de uma rotina de probing.
+
+    Args:
+        x_min, x_max: Limites do eixo X da área de probing.
+        y_min, y_max: Limites do eixo Y da área de probing.
+        nx, ny: Número de pontos no grid em X e Y.
+        pattern: "raster" (unidirecional), "serpentine" (zig-zag) ou
+                 "circular" (anéis concêntricos inscritos na área).
+
+    Returns:
+        Lista de tuplas (x, y) na ordem em que devem ser sondadas.
+    """
+    if pattern == "circular":
+        points = _circular_probe_points(x_min, x_max, y_min, y_max, nx, ny)
+    else:
+        xs = np.linspace(x_min, x_max, nx)
+        ys = np.linspace(y_min, y_max, ny)
+        points = []
+        for yi, y in enumerate(ys):
+            row_xs = xs if (pattern == "raster" or yi % 2 == 0) else xs[::-1]
+            for x in row_xs:
+                points.append((float(x), float(y)))
+
+    if not points:
+        points = [(float(x_min), float(y_min))]
+    return points
+
+
 def generate_probe_gcode(x_min: float, x_max: float,
                          y_min: float, y_max: float,
                          nx: int, ny: int,
@@ -330,13 +424,18 @@ def generate_probe_gcode(x_min: float, x_max: float,
         feed_probe: Velocidade de probing (mm/min).
         feed_travel: Velocidade de deslocamento (mm/min).
         controller: "mach3" ou "grbl".
-        pattern: "raster" (unidirecional) ou "serpentine" (zig-zag).
+        pattern: "raster" (unidirecional), "serpentine" (zig-zag) ou
+                 "circular" (anéis concêntricos inscritos na área).
 
     Returns:
         String com G-Code de probing completo.
     """
-    xs = np.linspace(x_min, x_max, nx)
-    ys = np.linspace(y_min, y_max, ny)
+    # Lista ordenada de pontos (x, y) conforme o padrão escolhido.
+    probe_points = generate_probe_points(
+        x_min, x_max, y_min, y_max, nx, ny, pattern
+    )
+
+    last_x, last_y = probe_points[-1]
 
     lines = []
 
@@ -351,16 +450,10 @@ def generate_probe_gcode(x_min: float, x_max: float,
         lines.append(f"G0 Z{safe_z:.3f}")
         lines.append(f"#499 = {safe_z:.3f}")
 
-        last_x = x_min
-        last_y = y_min
-
-        for yi, y in enumerate(ys):
-            row_xs = xs if (pattern == "raster" or yi % 2 == 0) else xs[::-1]
-            for x in row_xs:
-                lines.append(f"G0 X{x:.3f}Y{y:.3f}")
-                lines.append(f"G31 Z{probe_z:.3f} F{feed_probe:.1f}")
-                lines.append(f"G0 Z{safe_z:.3f}")
-                last_x, last_y = x, y
+        for x, y in probe_points:
+            lines.append(f"G0 X{x:.3f}Y{y:.3f}")
+            lines.append(f"G31 Z{probe_z:.3f} F{feed_probe:.1f}")
+            lines.append(f"G0 Z{safe_z:.3f}")
 
         lines.append(f"G0 Z{safe_z:.3f}")
         lines.append(f"G0 X{last_x:.3f}Y{last_y:.3f}")
@@ -372,18 +465,16 @@ def generate_probe_gcode(x_min: float, x_max: float,
     else:
         # Formato GRBL / Candle
         lines.append("; === GCode Tools — Probing Routine (GRBL) ===")
-        lines.append(f"; Grid: {nx}x{ny}  |  Área: X[{x_min:.3f},{x_max:.3f}] Y[{y_min:.3f},{y_max:.3f}]")
+        lines.append(f"; Padrão: {pattern} | Área: X[{x_min:.3f},{x_max:.3f}] Y[{y_min:.3f},{y_max:.3f}]")
         lines.append("G90 (modo absoluto)")
         lines.append("G21 (unidades mm)")
         lines.append(f"G0 Z{safe_z:.3f} F{feed_travel:.0f} (subir para Z seguro)")
         lines.append("")
 
-        for yi, y in enumerate(ys):
-            row_xs = xs if (pattern == "raster" or yi % 2 == 0) else xs[::-1]
-            for x in row_xs:
-                lines.append(f"G0 X{x:.3f} Y{y:.3f} F{feed_travel:.0f}")
-                lines.append(f"G38.2 Z{probe_z:.3f} F{feed_probe:.1f}")
-                lines.append(f"G0 Z{safe_z:.3f}")
+        for x, y in probe_points:
+            lines.append(f"G0 X{x:.3f} Y{y:.3f} F{feed_travel:.0f}")
+            lines.append(f"G38.2 Z{probe_z:.3f} F{feed_probe:.1f}")
+            lines.append(f"G0 Z{safe_z:.3f}")
 
         lines.append("")
         lines.append("; === Fim do Probing ===")
