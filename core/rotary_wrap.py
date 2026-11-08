@@ -216,32 +216,53 @@ def calculate_feed_for_rotary(linear_feed_mm_min: float,
     return (linear_feed_mm_min / circumference) * 360.0
 
 
-def estimate_cylinder_dimensions(blocks: List[GCodeBlock]) -> dict:
+def estimate_cylinder_dimensions(blocks: List[GCodeBlock],
+                                 y_to_a: bool = True) -> dict:
     """
     Estima as dimensões necessárias para wrapping baseado no G-Code.
 
+    O mapeamento define qual eixo vira rotação:
+        - y_to_a=True  → Y vira A (cilindro ao longo de X)
+        - y_to_a=False → X vira A (cilindro ao longo de Y)
+
+    O diâmetro sugerido é calculado sobre o percurso do eixo que será
+    enrolado (Y no modo Y→A, X no modo X→A), garantindo que o trajeto caiba
+    em no máximo uma volta completa e evitando sobreposição de linhas.
+
+    Args:
+        blocks: Lista de GCodeBlocks.
+        y_to_a: Mapeamento do 4º eixo selecionado.
+
     Returns:
         Dicionário com:
-        - x_length: comprimento necessário em X (mm)
-        - y_travel: distância total percorrida em Y (define circunferência mínima)
+        - axis_length: comprimento do tarugo ao longo do eixo do cilindro (mm)
+        - wrap_travel: percurso linear que será convertido em A (mm)
         - suggested_diameter: diâmetro mínimo sugerido (mm)
+        - x_length / y_travel: mantidos para compatibilidade
     """
-    ys = [b.y for b in blocks if b.is_move and b.y is not None]
     xs = [b.x for b in blocks if b.is_move and b.x is not None]
+    ys = [b.y for b in blocks if b.is_move and b.y is not None]
 
-    if not ys:
-        return {"x_length": 0.0, "y_travel": 0.0, "suggested_diameter": 0.0}
-
-    y_range = max(ys) - min(ys)
     x_range = (max(xs) - min(xs)) if xs else 0.0
+    y_range = (max(ys) - min(ys)) if ys else 0.0
 
-    # Diâmetro mínimo para que Y_range caiba em uma volta completa
-    suggested_diameter = y_range / math.pi
+    if y_to_a:
+        axis_range = x_range      # cilindro ao longo de X
+        wrap_range = y_range      # Y vira A
+    else:
+        axis_range = y_range      # cilindro ao longo de Y
+        wrap_range = x_range      # X vira A
+
+    # Diâmetro mínimo para que o percurso enrolado caiba em uma volta
+    suggested_diameter = (wrap_range / math.pi) if wrap_range > 0 else 0.0
 
     return {
+        "axis_length": round(axis_range, 3),
+        "wrap_travel": round(wrap_range, 3),
+        "suggested_diameter": round(suggested_diameter, 3),
+        # Compatibilidade com chamadas antigas
         "x_length": round(x_range, 3),
         "y_travel": round(y_range, 3),
-        "suggested_diameter": round(suggested_diameter, 3),
     }
 
 

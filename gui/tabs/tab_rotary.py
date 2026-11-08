@@ -118,10 +118,20 @@ class RotaryTab(QWidget):
             QMessageBox.warning(self, "Aviso", "Nenhum arquivo G-Code carregado.")
             return
 
-        info = estimate_cylinder_dimensions(blocks)
+        # A estimativa depende do mapeamento selecionado: Y→A enrola o Y,
+        # X→A enrola o X. Usar o eixo errado faz o percurso dar mais de uma
+        # volta e sobrepor as linhas no cilindro.
+        y_to_a = "Y → A" in self._cmb_axis.currentText()
+        info = estimate_cylinder_dimensions(blocks, y_to_a=y_to_a)
+
+        axis_name = "X" if y_to_a else "Y"
+        wrap_name = "Y" if y_to_a else "X"
+        mapping_txt = "Y → A" if y_to_a else "X → A"
+
         self._lbl_est_info.setText(
-            f"Comprimento X da peça: {info['x_length']:.2f} mm\n"
-            f"Percurso linear Y total: {info['y_travel']:.2f} mm\n"
+            f"Mapeamento: {mapping_txt}\n"
+            f"Comprimento da peça no eixo {axis_name}: {info['axis_length']:.2f} mm\n"
+            f"Percurso linear {wrap_name} (vira A): {info['wrap_travel']:.2f} mm\n"
             f"Diâmetro mínimo sugerido: {info['suggested_diameter']:.2f} mm"
         )
         self._diam_edit.setText(f"{info['suggested_diameter']:.2f}")

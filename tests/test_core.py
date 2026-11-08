@@ -18,6 +18,7 @@ from core.splitter import split_by_layer
 from core.transforms import rotate, translate, scale, mirror_x
 from core.rotary_wrap import (
     wrap_to_rotary,
+    estimate_cylinder_dimensions,
     extract_rotary_trajectories_3d,
     rotary_point_3d,
     rotary_workpiece_matrix,
@@ -242,6 +243,48 @@ class TestRotary(unittest.TestCase):
         )
         self.assertIn("cylinder", data)
         self.assertGreater(len(data["g1_lines"]), 0)
+
+    def test_estimate_diameter_uses_y_travel_for_y_to_a(self):
+        circumference = math.pi * 20.0
+        blocks = [
+            parse_line("G0 X0 Y0"),
+            parse_line(f"G1 X40 Y0"),
+            parse_line(f"G1 X40 Y{circumference}"),
+        ]
+        info = estimate_cylinder_dimensions(blocks, y_to_a=True)
+
+        # Cilindro ao longo de X: comprimento = X; Y vira A.
+        self.assertAlmostEqual(info["axis_length"], 40.0, places=3)
+        self.assertAlmostEqual(info["wrap_travel"], circumference, places=3)
+        self.assertAlmostEqual(info["suggested_diameter"], 20.0, places=3)
+
+    def test_estimate_diameter_uses_x_travel_for_x_to_a(self):
+        circumference = math.pi * 20.0
+        blocks = [
+            parse_line("G0 X0 Y0"),
+            parse_line(f"G1 X{circumference} Y0"),
+            parse_line(f"G1 X{circumference} Y40"),
+        ]
+        info = estimate_cylinder_dimensions(blocks, y_to_a=False)
+
+        # Cilindro ao longo de Y: comprimento = Y; X vira A.
+        self.assertAlmostEqual(info["axis_length"], 40.0, places=3)
+        self.assertAlmostEqual(info["wrap_travel"], circumference, places=3)
+        self.assertAlmostEqual(info["suggested_diameter"], 20.0, places=3)
+
+    def test_x_to_a_wrap_fits_in_one_turn(self):
+        # Com diâmetro estimado pelo X, o X completo deve mapear em 360°.
+        circumference = math.pi * 20.0
+        blocks = [
+            parse_line("G0 X0 Y0"),
+            parse_line(f"G1 X0 Y0"),
+            parse_line(f"G1 X{circumference} Y40"),
+        ]
+        info = estimate_cylinder_dimensions(blocks, y_to_a=False)
+        wrapped = wrap_to_rotary(blocks, diameter_mm=info["suggested_diameter"],
+                                 y_to_a=False)
+        a_values = [b.a for b in wrapped if b.a is not None]
+        self.assertAlmostEqual(max(a_values) - min(a_values), 360.0, places=2)
 
     def test_zero_at_surface_adjusts_z(self):
         # Para diâmetro 50mm, raio = 25mm.
