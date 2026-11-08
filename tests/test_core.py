@@ -163,6 +163,26 @@ class TestSurfaceMap(unittest.TestCase):
         self.assertIsNone(result[1].z)
         self.assertEqual(result[1].to_gcode(), "G1 X5")
 
+    def test_does_not_inject_z_into_setup_line(self):
+        # Cabeçalho típico de CAM: G0 é apenas modal, não há eixos.
+        hm = HeightMap.from_points([
+            (0, 0, 0.1997), (10, 0, 0.1), (0, 10, 0.2), (10, 10, 0.3),
+        ])
+        header = "N6 G00 G21 G17 G90 G40 G49 G80"
+        blocks = [
+            parse_line(header),
+            parse_line("G0 X0 Y0 Z5"),
+            parse_line("G1 Z-1 F100"),
+            parse_line("G1 X10 Y10"),
+        ]
+        result = apply_surface_map(blocks, hm)
+
+        self.assertIsNone(result[0].z)
+        self.assertEqual(result[0].to_gcode(), header)
+        # Movimentos reais continuam sendo compensados normalmente.
+        self.assertAlmostEqual(result[1].z, 5.1997, places=4)
+        self.assertAlmostEqual(result[2].z, -0.8003, places=4)
+
 
 class TestSplitter(unittest.TestCase):
     def test_layer_split_keeps_modal_moves(self):

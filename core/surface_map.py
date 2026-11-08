@@ -267,6 +267,13 @@ def apply_surface_map(blocks: List[GCodeBlock],
         if not b.is_move:
             continue
 
+        # Linhas de setup como "N6 G00 G21 G17 G90 G40 G49 G80" contêm G0
+        # apenas como modo modal e não têm nenhum eixo. Não representam um
+        # deslocamento real, então não devem receber Z compensado nem
+        # alterar a posição modal (isso injetava um Z errado no cabeçalho).
+        if b.x is None and b.y is None and b.z is None:
+            continue
+
         # Posição efetiva (coordenadas modais propagadas)
         px = b.x if b.x is not None else cur_x
         py = b.y if b.y is not None else cur_y
