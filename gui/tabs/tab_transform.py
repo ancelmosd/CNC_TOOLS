@@ -8,6 +8,7 @@ from PySide6.QtWidgets import (
     QLabel, QLineEdit, QPushButton, QGroupBox, QMessageBox, QScrollArea, QFrame
 )
 from core import transforms
+from gui.theme import set_role
 
 
 class TransformTab(QWidget):
@@ -49,7 +50,7 @@ class TransformTab(QWidget):
         grp_scale_layout.addWidget(self._scale_z, 0, 5)
 
         btn_scale = QPushButton("Aplicar Escala")
-        btn_scale.setStyleSheet("background-color: #1565c0; font-weight: bold; padding: 5px;")
+        set_role(btn_scale, "primary")
         btn_scale.clicked.connect(self._apply_scale)
         grp_scale_layout.addWidget(btn_scale, 1, 0, 1, 6)
 
@@ -72,7 +73,7 @@ class TransformTab(QWidget):
         grp_trans_layout.addWidget(self._trans_z, 0, 5)
 
         btn_trans = QPushButton("Aplicar Translação")
-        btn_trans.setStyleSheet("background-color: #1565c0; font-weight: bold; padding: 5px;")
+        set_role(btn_trans, "primary")
         btn_trans.clicked.connect(self._apply_translate)
         grp_trans_layout.addWidget(btn_trans, 1, 0, 1, 6)
 
@@ -86,12 +87,12 @@ class TransformTab(QWidget):
         grp_mirror_layout = QVBoxLayout(grp_mirror)
 
         btn_mirror_x = QPushButton("Espelhar em X")
-        btn_mirror_x.setStyleSheet("background-color: #6a1b9a; padding: 6px;")
+        set_role(btn_mirror_x, "purple")
         btn_mirror_x.clicked.connect(lambda: self._apply_mirror('x'))
         grp_mirror_layout.addWidget(btn_mirror_x)
 
         btn_mirror_y = QPushButton("Espelhar em Y")
-        btn_mirror_y.setStyleSheet("background-color: #6a1b9a; padding: 6px;")
+        set_role(btn_mirror_y, "purple")
         btn_mirror_y.clicked.connect(lambda: self._apply_mirror('y'))
         grp_mirror_layout.addWidget(btn_mirror_y)
 
@@ -114,7 +115,7 @@ class TransformTab(QWidget):
         grp_rot_layout.addWidget(self._rot_cy, 2, 1)
 
         btn_rotate = QPushButton("Aplicar Rotação")
-        btn_rotate.setStyleSheet("background-color: #00695c; font-weight: bold; padding: 5px;")
+        set_role(btn_rotate, "teal")
         btn_rotate.clicked.connect(self._apply_rotate)
         grp_rot_layout.addWidget(btn_rotate, 3, 0, 1, 2)
 

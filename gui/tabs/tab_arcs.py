@@ -8,6 +8,7 @@ from PySide6.QtWidgets import (
     QLineEdit, QPushButton, QMessageBox, QGroupBox, QScrollArea, QFrame
 )
 from core.arc_converter import arc_to_lines
+from gui.theme import set_role
 
 
 class ArcsTab(QWidget):
@@ -39,7 +40,8 @@ class ArcsTab(QWidget):
             "ou antes de aplicar transformações como o 4º eixo (rotary wrap) e auto-leveling."
         )
         lbl_desc.setWordWrap(True)
-        lbl_desc.setStyleSheet("color: #9e9e9e; font-size: 11px;")
+        set_role(lbl_desc, "muted")
+        lbl_desc.setStyleSheet("font-size: 11px;")
         layout.addWidget(lbl_desc)
 
         grp_cfg = QGroupBox("⚙️ Configurações de Precisão")
@@ -51,18 +53,21 @@ class ArcsTab(QWidget):
         grid.addWidget(self._edit_tol, 0, 1)
 
         lbl_tip = QLabel("Menor valor = maior precisão e mais segmentos (padrão: 0.01mm).")
-        lbl_tip.setStyleSheet("color: #757575; font-size: 10px;")
+        set_role(lbl_tip, "muted")
+        lbl_tip.setStyleSheet("font-size: 10px;")
         grid.addWidget(lbl_tip, 1, 0, 1, 2)
 
         layout.addWidget(grp_cfg)
 
         btn_apply = QPushButton("〰️ Converter G2 / G3 → G1")
-        btn_apply.setStyleSheet("background-color: #e65100; font-weight: bold; font-size: 13px; padding: 10px;")
+        set_role(btn_apply, "orange")
+        btn_apply.setStyleSheet("font-size: 13px;")
         btn_apply.clicked.connect(self._apply)
         layout.addWidget(btn_apply)
 
         self._lbl_result = QLabel("")
-        self._lbl_result.setStyleSheet("color: #81c784; font-size: 11px;")
+        set_role(self._lbl_result, "success")
+        self._lbl_result.setStyleSheet("font-size: 11px;")
         self._lbl_result.setWordWrap(True)
         layout.addWidget(self._lbl_result)
 

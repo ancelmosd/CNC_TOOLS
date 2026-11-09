@@ -27,6 +27,7 @@ from core.surface_map import (
     HeightMap, apply_surface_map, generate_probe_gcode, generate_probe_points,
 )
 from core.gcode_parser import get_bounding_box
+from gui.theme import set_role, update_role
 
 
 class SurfaceTab(QWidget):
@@ -96,7 +97,8 @@ class SurfaceTab(QWidget):
             "Você pode ajustar ou definir uma margem adicional de folga."
         )
         lbl_desc.setWordWrap(True)
-        lbl_desc.setStyleSheet("color: #9e9e9e; font-size: 11px;")
+        set_role(lbl_desc, "muted")
+        lbl_desc.setStyleSheet("font-size: 11px;")
         grp_bounds_layout.addWidget(lbl_desc)
 
         grid_bounds = QGridLayout()
@@ -201,7 +203,8 @@ class SurfaceTab(QWidget):
         grp_probe_layout.addWidget(self._chk_pick_pattern)
 
         self._lbl_pattern_status = QLabel("")
-        self._lbl_pattern_status.setStyleSheet("color: #b0bec5; font-size: 11px;")
+        set_role(self._lbl_pattern_status, "muted")
+        self._lbl_pattern_status.setStyleSheet("font-size: 11px;")
         self._lbl_pattern_status.setWordWrap(True)
         grp_probe_layout.addWidget(self._lbl_pattern_status)
 
@@ -209,13 +212,13 @@ class SurfaceTab(QWidget):
         h_pattern_btns.setSpacing(4)
 
         self._btn_delete_pattern = QPushButton("🗑️ Excluir Ponto do Padrão")
-        self._btn_delete_pattern.setStyleSheet("background-color: #b71c1c; padding: 6px;")
+        set_role(self._btn_delete_pattern, "danger")
         self._btn_delete_pattern.setEnabled(False)
         self._btn_delete_pattern.clicked.connect(self._delete_pattern_point)
         h_pattern_btns.addWidget(self._btn_delete_pattern)
 
         self._btn_restore_pattern = QPushButton("↺ Restaurar Padrão")
-        self._btn_restore_pattern.setStyleSheet("background-color: #37474f; padding: 6px;")
+        set_role(self._btn_restore_pattern, "neutral")
         self._btn_restore_pattern.setToolTip(
             "Recria todos os pontos do padrão de varredura, desfazendo as exclusões."
         )
@@ -225,7 +228,7 @@ class SurfaceTab(QWidget):
         grp_probe_layout.addLayout(h_pattern_btns)
 
         self._btn_generate_probe = QPushButton("📄 Gerar Rotina de Probing")
-        self._btn_generate_probe.setStyleSheet("background-color: #1565c0; font-weight: bold; padding: 6px;")
+        set_role(self._btn_generate_probe, "primary")
         self._btn_generate_probe.clicked.connect(self._generate_probe)
         grp_probe_layout.addWidget(self._btn_generate_probe)
 
@@ -236,24 +239,26 @@ class SurfaceTab(QWidget):
         grp_map_layout = QVBoxLayout(grp_map)
 
         self._lbl_points_path = QLabel("Nenhum arquivo de pontos carregado")
-        self._lbl_points_path.setStyleSheet("color: #888888; font-size: 11px;")
+        set_role(self._lbl_points_path, "muted")
+        self._lbl_points_path.setStyleSheet("font-size: 11px;")
         self._lbl_points_path.setWordWrap(True)
         grp_map_layout.addWidget(self._lbl_points_path)
 
         h_btn_pts = QHBoxLayout()
         self._btn_import_points = QPushButton("📂 Importar Pontos (TXT / CSV)")
-        self._btn_import_points.setStyleSheet("background-color: #6a1b9a; font-weight: bold; padding: 6px;")
+        set_role(self._btn_import_points, "purple")
         self._btn_import_points.clicked.connect(self._import_points)
         h_btn_pts.addWidget(self._btn_import_points)
 
         self._btn_export_points = QPushButton("💾 Exportar Pontos...")
-        self._btn_export_points.setStyleSheet("background-color: #37474f; padding: 6px;")
+        set_role(self._btn_export_points, "neutral")
         self._btn_export_points.clicked.connect(self._export_points)
         h_btn_pts.addWidget(self._btn_export_points)
         grp_map_layout.addLayout(h_btn_pts)
 
         self._lbl_points_info = QLabel("")
-        self._lbl_points_info.setStyleSheet("color: #b0bec5; font-size: 11px;")
+        set_role(self._lbl_points_info, "muted")
+        self._lbl_points_info.setStyleSheet("font-size: 11px;")
         self._lbl_points_info.setWordWrap(True)
         grp_map_layout.addWidget(self._lbl_points_info)
 
@@ -264,7 +269,8 @@ class SurfaceTab(QWidget):
         grp_edit_layout = QVBoxLayout(grp_edit)
 
         lbl_edit_hint = QLabel("💡 Clique sobre um ponto no modelo 3D ou selecione na tabela abaixo.")
-        lbl_edit_hint.setStyleSheet("color: #ffd54f; font-size: 11px;")
+        set_role(lbl_edit_hint, "warning")
+        lbl_edit_hint.setStyleSheet("font-size: 11px;")
         grp_edit_layout.addWidget(lbl_edit_hint)
 
         grid_edit = QGridLayout()
@@ -272,17 +278,17 @@ class SurfaceTab(QWidget):
 
         grid_edit.addWidget(QLabel("Ponto Selecionado:"), 0, 0)
         self._lbl_sel_name = QLabel("Nenhum ponto selecionado")
-        self._lbl_sel_name.setStyleSheet("color: #00e5ff; font-weight: bold;")
+        set_role(self._lbl_sel_name, "accent")
         grid_edit.addWidget(self._lbl_sel_name, 0, 1)
 
         grid_edit.addWidget(QLabel("Coordenadas X / Y:"), 1, 0)
         self._lbl_sel_xy = QLabel("X: --  |  Y: --")
-        self._lbl_sel_xy.setStyleSheet("color: #e0e0e0;")
         grid_edit.addWidget(self._lbl_sel_xy, 1, 1)
 
         grid_edit.addWidget(QLabel("Compensação Z (mm):"), 2, 0)
         self._edit_sel_z = QLineEdit("0.0000")
-        self._edit_sel_z.setStyleSheet("font-size: 13px; font-weight: bold; color: #69f0ae;")
+        set_role(self._edit_sel_z, "success")
+        self._edit_sel_z.setStyleSheet("font-size: 13px;")
         grid_edit.addWidget(self._edit_sel_z, 2, 1)
 
         grp_edit_layout.addLayout(grid_edit)
@@ -292,13 +298,13 @@ class SurfaceTab(QWidget):
         h_adjust.setSpacing(4)
         for val, txt in [(-0.05, "-0.05"), (-0.01, "-0.01"), (+0.01, "+0.01"), (+0.05, "+0.05")]:
             btn_adj = QPushButton(txt)
-            btn_adj.setStyleSheet("background-color: #2a2a2a; padding: 4px;")
+            set_role(btn_adj, "subtle")
             btn_adj.clicked.connect(lambda _, delta=val: self._adjust_current_z(delta))
             h_adjust.addWidget(btn_adj)
         grp_edit_layout.addLayout(h_adjust)
 
         self._btn_save_point = QPushButton("💾 Atualizar Compensação Z deste Ponto")
-        self._btn_save_point.setStyleSheet("background-color: #00695c; font-weight: bold; padding: 8px;")
+        set_role(self._btn_save_point, "teal")
         self._btn_save_point.clicked.connect(self._apply_manual_point_edit)
         grp_edit_layout.addWidget(self._btn_save_point)
 
@@ -323,12 +329,13 @@ class SurfaceTab(QWidget):
             "💡 Use Ctrl+clique ou Shift+clique para selecionar vários pontos. "
             "Pressione Delete para excluir os selecionados."
         )
-        lbl_table_hint.setStyleSheet("color: #9e9e9e; font-size: 11px;")
+        set_role(lbl_table_hint, "muted")
+        lbl_table_hint.setStyleSheet("font-size: 11px;")
         lbl_table_hint.setWordWrap(True)
         grp_table_layout.addWidget(lbl_table_hint)
 
         self._btn_delete_points = QPushButton("🗑️ Excluir Pontos Selecionados")
-        self._btn_delete_points.setStyleSheet("background-color: #b71c1c; font-weight: bold; padding: 6px;")
+        set_role(self._btn_delete_points, "danger")
         self._btn_delete_points.setToolTip(
             "Remove da tabela, do heightmap e da visualização 3D os pontos "
             "selecionados. A exclusão vale para a exportação e para a "
@@ -345,7 +352,8 @@ class SurfaceTab(QWidget):
 
         # ---------------- 6. Botão Aplicar Nivelamento Z ao G-Code ----------------
         self._btn_apply = QPushButton("✅ Aplicar Compensação Z ao G-Code")
-        self._btn_apply.setStyleSheet("background-color: #2e7d32; font-weight: bold; font-size: 13px; padding: 10px;")
+        set_role(self._btn_apply, "success")
+        self._btn_apply.setStyleSheet("font-size: 13px;")
         self._btn_apply.clicked.connect(self._apply_map)
         layout.addWidget(self._btn_apply)
 
@@ -533,7 +541,7 @@ class SurfaceTab(QWidget):
                 return
 
             self._lbl_points_path.setText(f"📄 {os.path.basename(path)}")
-            self._lbl_points_path.setStyleSheet("color: #81c784; font-weight: bold;")
+            update_role(self._lbl_points_path, "success")
 
             n = len(self._heightmap.points_x)
 

@@ -29,6 +29,7 @@ from core.rotary_wrap import (
     rotary_config_from_blocks,
     rotary_workpiece_matrix,
 )
+from gui.theme import DARK, get_palette, set_role, update_role
 
 
 class PyVistaGCodeViewer(QWidget):
@@ -74,6 +75,19 @@ class PyVistaGCodeViewer(QWidget):
         self._last_tool_tip: Optional[Tuple[float, float, float]] = None
         self._last_tool_dir: Tuple[float, float, float] = (0.0, 0.0, -1.0)
 
+        self._theme = DARK
+        palette = get_palette(self._theme)
+        self._viewer_bg = palette["viewer_bg"]
+        self._viewer_axes = palette["viewer_axes"]
+        self._viewer_edge = palette["viewer_edge"]
+        self._viewer_bbox = palette["viewer_bbox"]
+        self._viewer_text = palette["viewer_text"]
+        self._plot_g1 = palette["syntax_g"]
+        self._plot_g0 = palette["danger"]
+        self._plot_grid_line = palette["orange_bg"]
+        self._plot_grid_point = palette["warning"]
+        self._plot_tool = "#ffeb3b" if self._theme == DARK else "#f9a825"
+
         self._setup_ui()
 
     def _setup_ui(self):
@@ -83,7 +97,7 @@ class PyVistaGCodeViewer(QWidget):
 
         # ---------------- Barra Superior de Ferramentas ----------------
         top_bar = QFrame()
-        top_bar.setStyleSheet("background-color: #202020; border-radius: 4px; padding: 2px;")
+        set_role(top_bar, "panel")
         top_layout = QHBoxLayout(top_bar)
         top_layout.setContentsMargins(6, 4, 6, 4)
         top_layout.setSpacing(6)
@@ -111,7 +125,7 @@ class PyVistaGCodeViewer(QWidget):
 
         self._btn_reset = QPushButton("⊡ Enquadrar")
         self._btn_reset.setToolTip("Enquadrar e Centralizar a Peça")
-        self._btn_reset.setStyleSheet("background-color: #1565c0; font-weight: bold;")
+        set_role(self._btn_reset, "primary")
         self._btn_reset.clicked.connect(self.reset_camera)
         top_layout.addWidget(self._btn_reset)
 
@@ -122,7 +136,7 @@ class PyVistaGCodeViewer(QWidget):
         self._btn_pick_mode.setCheckable(True)
         self._btn_pick_mode.setChecked(True)
         self._btn_pick_mode.setToolTip("Quando ativo, clique em um ponto de probe no modelo 3D para selecioná-lo")
-        self._btn_pick_mode.setStyleSheet("background-color: #6a1b9a; font-weight: bold;")
+        set_role(self._btn_pick_mode, "purple")
         self._btn_pick_mode.toggled.connect(self._toggle_picking_mode)
         top_layout.addWidget(self._btn_pick_mode)
 
@@ -130,15 +144,16 @@ class PyVistaGCodeViewer(QWidget):
 
         # Dica de navegação 3D
         hint = QLabel("💡 Clique no ponto para selecionar e editar compensação Z")
-        hint.setStyleSheet("color: #ffd54f; font-size: 11px;")
+        set_role(hint, "warning")
+        hint.setStyleSheet("font-size: 11px;")
         top_layout.addWidget(hint)
 
         layout.addWidget(top_bar)
 
         # ---------------- Área Central: Interactor PyVista / VTK ----------------
         self.plotter = QtInteractor(self)
-        self.plotter.set_background("#141414")
-        self.plotter.add_axes()
+        self.plotter.set_background(self._viewer_bg)
+        self.plotter.add_axes(color=self._viewer_axes)
         layout.addWidget(self.plotter.interactor, stretch=1)
 
         # Ativar picking nativo de pontos
@@ -146,51 +161,51 @@ class PyVistaGCodeViewer(QWidget):
 
         # ---------------- Barra Inferior de Camadas e Medidas ----------------
         bot_bar = QFrame()
-        bot_bar.setStyleSheet("background-color: #1e1e1e; border-radius: 4px; padding: 2px;")
+        set_role(bot_bar, "panel")
         bot_layout = QHBoxLayout(bot_bar)
         bot_layout.setContentsMargins(8, 3, 8, 3)
         bot_layout.setSpacing(12)
 
         self._chk_g1 = QCheckBox("Corte (G1)")
         self._chk_g1.setChecked(True)
-        self._chk_g1.setStyleSheet("color: #00e5ff; font-weight: bold;")
+        set_role(self._chk_g1, "accent")
         self._chk_g1.stateChanged.connect(self._update_visibility)
         bot_layout.addWidget(self._chk_g1)
 
         self._chk_color_z = QCheckBox("Gradiente Z")
         self._chk_color_z.setChecked(False)
-        self._chk_color_z.setStyleSheet("color: #ba68c8; font-weight: bold;")
+        set_role(self._chk_color_z, "purple")
         self._chk_color_z.setToolTip("Colorir os cortes G1 com gradiente de cores por altitude Z")
         self._chk_color_z.stateChanged.connect(self._refresh_plotter)
         bot_layout.addWidget(self._chk_color_z)
 
         self._chk_g0 = QCheckBox("Rápidos (G0)")
         self._chk_g0.setChecked(True)
-        self._chk_g0.setStyleSheet("color: #ff5252;")
+        set_role(self._chk_g0, "danger")
         self._chk_g0.stateChanged.connect(self._update_visibility)
         bot_layout.addWidget(self._chk_g0)
 
         self._chk_grid = QCheckBox("Grade Probe")
         self._chk_grid.setChecked(True)
-        self._chk_grid.setStyleSheet("color: #ffd54f;")
+        set_role(self._chk_grid, "warning")
         self._chk_grid.stateChanged.connect(self._update_visibility)
         bot_layout.addWidget(self._chk_grid)
 
         self._chk_measured = QCheckBox("Pontos Medidos")
         self._chk_measured.setChecked(True)
-        self._chk_measured.setStyleSheet("color: #69f0ae; font-weight: bold;")
+        set_role(self._chk_measured, "success")
         self._chk_measured.stateChanged.connect(self._update_visibility)
         bot_layout.addWidget(self._chk_measured)
 
         self._chk_box = QCheckBox("Caixa 3D")
         self._chk_box.setChecked(True)
-        self._chk_box.setStyleSheet("color: #b0bec5;")
+        set_role(self._chk_box, "muted")
         self._chk_box.stateChanged.connect(self._update_visibility)
         bot_layout.addWidget(self._chk_box)
 
         self._chk_cylinder = QCheckBox("Tarugo 4º Eixo")
         self._chk_cylinder.setChecked(True)
-        self._chk_cylinder.setStyleSheet("color: #ffb74d; font-weight: bold;")
+        set_role(self._chk_cylinder, "orange")
         self._chk_cylinder.stateChanged.connect(self._update_visibility)
         self._chk_cylinder.setVisible(False)
         bot_layout.addWidget(self._chk_cylinder)
@@ -198,10 +213,33 @@ class PyVistaGCodeViewer(QWidget):
         bot_layout.addStretch()
 
         self._dim_label = QLabel("Dimensões: X: 0.0mm | Y: 0.0mm | Z: 0.0mm")
-        self._dim_label.setStyleSheet("color: #e0e0e0; font-weight: bold; font-size: 11px;")
+        set_role(self._dim_label, "strong")
+        self._dim_label.setStyleSheet("font-size: 11px;")
         bot_layout.addWidget(self._dim_label)
 
         layout.addWidget(bot_bar)
+
+    # ------------------------------------------------------------------
+    # Tema
+    # ------------------------------------------------------------------
+
+    def apply_theme(self, theme: str):
+        """Aplica o tema ao fundo, eixos e textos do visualizador 3D."""
+        self._theme = theme
+        palette = get_palette(theme)
+        self._viewer_bg = palette["viewer_bg"]
+        self._viewer_axes = palette["viewer_axes"]
+        self._viewer_edge = palette["viewer_edge"]
+        self._viewer_bbox = palette["viewer_bbox"]
+        self._viewer_text = palette["viewer_text"]
+        self._plot_g1 = palette["syntax_g"]
+        self._plot_g0 = palette["danger"]
+        self._plot_grid_line = palette["orange_bg"]
+        self._plot_grid_point = palette["warning"]
+        self._plot_tool = "#ffeb3b" if theme == DARK else "#f9a825"
+
+        self.plotter.set_background(self._viewer_bg)
+        self._refresh_plotter()
 
     # ------------------------------------------------------------------
     # Câmeras e Vistas
@@ -247,14 +285,14 @@ class PyVistaGCodeViewer(QWidget):
     def _toggle_picking_mode(self, active: bool):
         if active:
             self._enable_point_picking()
-            self._btn_pick_mode.setStyleSheet("background-color: #6a1b9a; font-weight: bold;")
+            update_role(self._btn_pick_mode, "purple")
         else:
             try:
                 self.plotter.disable_picking()
             except Exception:
                 pass
             self._picking_enabled = False
-            self._btn_pick_mode.setStyleSheet("background-color: #37474f;")
+            update_role(self._btn_pick_mode, "neutral")
 
     def set_pick_target(self, target: str):
         """Define se o clique 3D seleciona pontos medidos ou do padrão."""
@@ -314,7 +352,7 @@ class PyVistaGCodeViewer(QWidget):
 
         self.plotter.add_mesh(
             highlight_poly,
-            color="#ffffff",
+            color=self._viewer_text,
             point_size=26,
             render_points_as_spheres=True,
             name="selected_probe_highlight",
@@ -327,7 +365,7 @@ class PyVistaGCodeViewer(QWidget):
             label_txt,
             point_color="#ffff00",
             point_size=12,
-            text_color="#ffffff",
+            text_color=self._viewer_text,
             font_size=12,
             name="selected_probe_label",
             always_visible=True,
@@ -631,13 +669,13 @@ class PyVistaGCodeViewer(QWidget):
     def _refresh_plotter(self):
         """Atualiza todas as malhas renderizadas no PyVista."""
         self.plotter.clear()
-        self.plotter.add_axes()
+        self.plotter.add_axes(color=self._viewer_axes)
 
         # 1. Cortes G1 (Ciano vibrante)
         if self._poly_g1 is not None and self._chk_g1.isChecked():
             self.plotter.add_mesh(
                 self._poly_g1,
-                color="#00e5ff",
+                color=self._plot_g1,
                 line_width=2.5,
                 name="g1_cuts",
                 render_lines_as_tubes=False,
@@ -648,7 +686,7 @@ class PyVistaGCodeViewer(QWidget):
         if self._poly_g0 is not None and self._chk_g0.isChecked():
             self.plotter.add_mesh(
                 self._poly_g0,
-                color="#ff5252",
+                color=self._plot_g0,
                 line_width=1.0,
                 opacity=0.6,
                 name="g0_rapids",
@@ -659,7 +697,7 @@ class PyVistaGCodeViewer(QWidget):
         if hasattr(self, '_poly_probe_grid') and self._poly_probe_grid is not None and self._chk_grid.isChecked():
             self.plotter.add_mesh(
                 self._poly_probe_grid,
-                color="#f57f17",
+                color=self._plot_grid_line,
                 line_width=1.5,
                 name="probe_grid_lines",
                 reset_camera=False
@@ -667,7 +705,7 @@ class PyVistaGCodeViewer(QWidget):
             if hasattr(self, '_poly_probe_pts') and self._poly_probe_pts is not None:
                 self.plotter.add_mesh(
                     self._poly_probe_pts,
-                    color="#ffd54f",
+                    color=self._plot_grid_point,
                     point_size=10,
                     render_points_as_spheres=True,
                     name="probe_grid_pts",
@@ -682,7 +720,7 @@ class PyVistaGCodeViewer(QWidget):
                 cmap="turbo",
                 opacity=0.45,
                 show_edges=True,
-                edge_color="#ffffff",
+                edge_color=self._viewer_edge,
                 name="surface_mesh",
                 reset_camera=False
             )
@@ -699,7 +737,7 @@ class PyVistaGCodeViewer(QWidget):
                 reset_camera=False,
                 scalar_bar_args={
                     "title": "Offset Z (mm)",
-                    "color": "#ffffff",
+                    "color": self._viewer_text,
                     "label_font_size": 10,
                     "title_font_size": 11
                 }
@@ -712,7 +750,7 @@ class PyVistaGCodeViewer(QWidget):
             self.plotter.add_mesh(
                 box_mesh,
                 style="wireframe",
-                color="#444444",
+                color=self._viewer_bbox,
                 line_width=1.0,
                 name="bbox_wireframe",
                 reset_camera=False
@@ -880,7 +918,7 @@ class PyVistaGCodeViewer(QWidget):
         )
         self.plotter.add_mesh(
             tool_cone,
-            color="#ffeb3b",
+            color=self._plot_tool,
             opacity=0.85,
             name="sim_tool_cutter",
             reset_camera=False
@@ -1002,5 +1040,5 @@ class PyVistaGCodeViewer(QWidget):
         self._selected_index = None
         self._dim_label.setText("Dimensões: X: 0.0mm | Y: 0.0mm | Z: 0.0mm")
         self.plotter.clear()
-        self.plotter.add_axes()
+        self.plotter.add_axes(color=self._viewer_axes)
         self.plotter.render()

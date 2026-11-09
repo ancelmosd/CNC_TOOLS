@@ -10,12 +10,14 @@ from typing import List, Optional
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QHBoxLayout, QVBoxLayout,
     QTabWidget, QToolBar, QLabel, QFileDialog,
-    QMessageBox, QSplitter, QStatusBar, QPushButton
+    QMessageBox, QSplitter, QStatusBar, QPushButton,
+    QToolButton, QSizePolicy
 )
 from PySide6.QtCore import Qt, QSettings
 from PySide6.QtGui import QDragEnterEvent, QDropEvent
 
 from core.gcode_parser import GCodeBlock, parse_file, write_file
+from gui.theme import DARK, LIGHT, build_stylesheet, set_role, update_role
 from gui.widgets.pyvista_viewer import PyVistaGCodeViewer
 from gui.tabs.tab_surface import SurfaceTab
 from gui.tabs.tab_rotary import RotaryTab
@@ -27,117 +29,6 @@ from gui.tabs.tab_editor import EditorTab
 
 APP_NAME = "GCode Tools"
 APP_VERSION = "2.0.0"
-
-# Estilo QSS Dark Moderno
-DARK_STYLE = """
-QMainWindow, QWidget {
-    background-color: #121212;
-    color: #e0e0e0;
-    font-family: 'Segoe UI', Arial, sans-serif;
-    font-size: 12px;
-}
-
-QToolBar {
-    background-color: #1e1e1e;
-    border-bottom: 1px solid #2d2d2d;
-    padding: 4px;
-    spacing: 6px;
-}
-
-QPushButton {
-    background-color: #2a2a2a;
-    color: #ffffff;
-    border: 1px solid #3d3d3d;
-    border-radius: 4px;
-    padding: 6px 12px;
-}
-
-QPushButton:hover {
-    background-color: #383838;
-    border-color: #555555;
-}
-
-QPushButton:pressed {
-    background-color: #1a1a1a;
-}
-
-QLineEdit, QComboBox {
-    background-color: #1e1e1e;
-    border: 1px solid #3d3d3d;
-    border-radius: 4px;
-    padding: 5px 8px;
-    color: #ffffff;
-}
-
-QLineEdit:focus, QComboBox:focus {
-    border: 1px solid #00e5ff;
-}
-
-QGroupBox {
-    border: 1px solid #2d2d2d;
-    border-radius: 6px;
-    margin-top: 12px;
-    padding-top: 12px;
-    font-weight: bold;
-    color: #00e5ff;
-}
-
-QGroupBox::title {
-    subcontrol-origin: margin;
-    subcontrol-position: top left;
-    padding: 0 6px;
-}
-
-QTabWidget::pane {
-    border: 1px solid #2d2d2d;
-    background-color: #181818;
-    border-radius: 4px;
-}
-
-QTabBar::tab {
-    background-color: #1e1e1e;
-    color: #aaaaaa;
-    padding: 8px 12px;
-    margin-right: 2px;
-    border-top-left-radius: 4px;
-    border-top-right-radius: 4px;
-}
-
-QTabBar::tab:selected {
-    background-color: #282828;
-    color: #00e5ff;
-    font-weight: bold;
-    border-bottom: 2px solid #00e5ff;
-}
-
-QTabBar::tab:hover {
-    background-color: #242424;
-    color: #ffffff;
-}
-
-QScrollBar:vertical {
-    border: none;
-    background-color: #181818;
-    width: 8px;
-    margin: 0;
-}
-
-QScrollBar::handle:vertical {
-    background-color: #383838;
-    border-radius: 4px;
-    min-height: 20px;
-}
-
-QScrollBar::handle:vertical:hover {
-    background-color: #4fc3f7;
-}
-
-QStatusBar {
-    background-color: #181818;
-    border-top: 1px solid #2d2d2d;
-    color: #888888;
-}
-"""
 
 
 class MainWindow(QMainWindow):
@@ -151,16 +42,19 @@ class MainWindow(QMainWindow):
         self._history: List[List[GCodeBlock]] = []
         self._settings = QSettings("GCodeToolsTeam", "GCodeTools")
 
+        saved_theme = str(self._settings.value("theme", DARK) or DARK)
+        self._theme = saved_theme if saved_theme in (DARK, LIGHT) else DARK
+
         self.setWindowTitle(f"{APP_NAME} v{APP_VERSION} — PyVista / VTK GPU 3D")
         self.resize(1400, 880)
         self.setMinimumSize(960, 640)
-        self.setStyleSheet(DARK_STYLE)
 
         # Habilitar arrastar e soltar arquivos (Drag & Drop)
         self.setAcceptDrops(True)
 
         self._setup_ui()
         self._restore_settings()
+        self._apply_theme(self._theme, persist=False)
 
     def _setup_ui(self):
         # ---------------- Barra de Ferramentas Superior ----------------
@@ -170,39 +64,39 @@ class MainWindow(QMainWindow):
 
         # Logotipo / Título
         lbl_brand = QLabel(f"  ⚙️ {APP_NAME} ")
-        lbl_brand.setStyleSheet("font-size: 15px; font-weight: bold; color: #00e5ff;")
+        lbl_brand.setObjectName("brandLabel")
         toolbar.addWidget(lbl_brand)
 
         toolbar.addSeparator()
 
         # Botão Abrir
         btn_open = QPushButton("📂 Abrir G-Code")
-        btn_open.setStyleSheet("background-color: #1565c0; font-weight: bold;")
+        set_role(btn_open, "primary")
         btn_open.clicked.connect(self._open_file)
         toolbar.addWidget(btn_open)
 
         # Botão Salvar
         btn_save = QPushButton("💾 Salvar")
-        btn_save.setStyleSheet("background-color: #2e7d32; font-weight: bold;")
+        set_role(btn_save, "success")
         btn_save.clicked.connect(self._save_file)
         toolbar.addWidget(btn_save)
 
         # Botão Salvar Como
         btn_save_as = QPushButton("💾 Salvar Como...")
-        btn_save_as.setStyleSheet("background-color: #1b5e20;")
+        set_role(btn_save_as, "success_dark")
         btn_save_as.clicked.connect(self._save_as)
         toolbar.addWidget(btn_save_as)
 
         # Botão Exportar 3D
         btn_export_3d = QPushButton("📤 Exportar 3D...")
-        btn_export_3d.setStyleSheet("background-color: #4a148c; font-weight: bold;")
+        set_role(btn_export_3d, "purple")
         btn_export_3d.setToolTip("Exportar malha e percursos 3D em STL, PLY, VTK ou OBJ")
         btn_export_3d.clicked.connect(self._export_3d)
         toolbar.addWidget(btn_export_3d)
 
         # Botão Desfazer
         btn_undo = QPushButton("↩️ Desfazer")
-        btn_undo.setStyleSheet("background-color: #37474f;")
+        set_role(btn_undo, "neutral")
         btn_undo.clicked.connect(self._undo)
         toolbar.addWidget(btn_undo)
 
@@ -210,8 +104,22 @@ class MainWindow(QMainWindow):
 
         # Rótulo do Arquivo Atual
         self._lbl_file = QLabel("Nenhum arquivo carregado (arraste um arquivo .gcode aqui)")
-        self._lbl_file.setStyleSheet("color: #aaaaaa; font-style: italic; margin-left: 10px;")
+        self._lbl_file.setObjectName("fileLabel")
+        set_role(self._lbl_file, "muted")
         toolbar.addWidget(self._lbl_file)
+
+        # Espaçador para manter o botão de tema discreto no canto direito
+        spacer = QWidget()
+        spacer.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        spacer.setStyleSheet("background-color: transparent;")
+        toolbar.addWidget(spacer)
+
+        # Botão discreto de alternância entre tema claro e escuro
+        self._btn_theme = QToolButton()
+        self._btn_theme.setObjectName("themeToggle")
+        self._btn_theme.setCursor(Qt.PointingHandCursor)
+        self._btn_theme.clicked.connect(self._toggle_theme)
+        toolbar.addWidget(self._btn_theme)
 
         # ---------------- Área Central (Splitter: Visualizador 3D + Abas) ----------------
         central_widget = QWidget()
@@ -304,11 +212,12 @@ class MainWindow(QMainWindow):
         self.setStatusBar(self._status_bar)
 
         self._status_msg = QLabel("Pronto. Abra ou arraste um arquivo G-Code para começar.")
-        self._status_msg.setStyleSheet("color: #b0bec5;")
+        set_role(self._status_msg, "muted")
         self._status_bar.addWidget(self._status_msg, 1)
 
         self._lines_label = QLabel("")
-        self._lines_label.setStyleSheet("color: #888888; font-weight: bold; margin-right: 12px;")
+        set_role(self._lines_label, "muted")
+        self._lines_label.setStyleSheet("margin-right: 12px;")
         self._status_bar.addPermanentWidget(self._lines_label)
 
     # ------------------------------------------------------------------
@@ -420,7 +329,7 @@ class MainWindow(QMainWindow):
 
             fname = os.path.basename(path)
             self._lbl_file.setText(f"📄 {fname}")
-            self._lbl_file.setStyleSheet("color: #00e5ff; font-weight: bold;")
+            update_role(self._lbl_file, "accent")
 
             # Sincronizar abas
             self._info_tab.refresh_stats()
@@ -493,6 +402,38 @@ class MainWindow(QMainWindow):
                 f"Malha 3D exportada com sucesso em:\n{path}")
         except Exception as e:
             QMessageBox.critical(self, "Erro na Exportação 3D", str(e))
+
+    # ------------------------------------------------------------------
+    # Tema (Claro / Escuro)
+    # ------------------------------------------------------------------
+
+    def _toggle_theme(self):
+        """Alterna entre o tema escuro e o claro."""
+        self._apply_theme(LIGHT if self._theme == DARK else DARK)
+
+    def _apply_theme(self, theme: str, persist: bool = True):
+        """Aplica o tema em toda a interface e nos componentes 3D/editor."""
+        if theme not in (DARK, LIGHT):
+            theme = DARK
+
+        self._theme = theme
+        self.setStyleSheet(build_stylesheet(theme))
+
+        if hasattr(self, "_btn_theme"):
+            if theme == DARK:
+                self._btn_theme.setText("☀️")
+                self._btn_theme.setToolTip("Mudar para tema claro")
+            else:
+                self._btn_theme.setText("🌙")
+                self._btn_theme.setToolTip("Mudar para tema escuro")
+
+        if hasattr(self, "_viewer"):
+            self._viewer.apply_theme(theme)
+        if hasattr(self, "_editor_tab"):
+            self._editor_tab.apply_theme(theme)
+
+        if persist:
+            self._settings.setValue("theme", theme)
 
     # ------------------------------------------------------------------
     # Persistência de Preferências

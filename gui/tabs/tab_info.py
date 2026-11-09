@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, QTimer
 
 from core.statistics import analyze_gcode, format_duration
+from gui.theme import set_role, update_role
 
 
 class InfoTab(QWidget):
@@ -56,11 +57,13 @@ class InfoTab(QWidget):
         # Coordenadas e Linha Atual
         h_info = QHBoxLayout()
         self._lbl_sim_pos = QLabel("Posição: X: 0.000 | Y: 0.000 | Z: 0.000 mm")
-        self._lbl_sim_pos.setStyleSheet("color: #00e5ff; font-weight: bold; font-size: 12px;")
+        set_role(self._lbl_sim_pos, "accent")
+        self._lbl_sim_pos.setStyleSheet("font-size: 12px;")
         h_info.addWidget(self._lbl_sim_pos)
 
         self._lbl_sim_line = QLabel("Linha: #0")
-        self._lbl_sim_line.setStyleSheet("color: #ffd54f; font-weight: bold; font-size: 12px;")
+        set_role(self._lbl_sim_line, "warning")
+        self._lbl_sim_line.setStyleSheet("font-size: 12px;")
         h_info.addWidget(self._lbl_sim_line, alignment=Qt.AlignRight)
         grp_sim_layout.addLayout(h_info)
 
@@ -83,12 +86,12 @@ class InfoTab(QWidget):
         h_ctrls = QHBoxLayout()
 
         self._btn_play = QPushButton("▶ Iniciar")
-        self._btn_play.setStyleSheet("background-color: #2e7d32; font-weight: bold; font-size: 12px; padding: 6px 14px;")
+        set_role(self._btn_play, "success")
         self._btn_play.clicked.connect(self._toggle_play)
         h_ctrls.addWidget(self._btn_play)
 
         self._btn_reset = QPushButton("⏹ Reiniciar")
-        self._btn_reset.setStyleSheet("background-color: #37474f; font-weight: bold; padding: 6px 12px;")
+        set_role(self._btn_reset, "neutral")
         self._btn_reset.clicked.connect(self._reset_sim)
         h_ctrls.addWidget(self._btn_reset)
 
@@ -122,7 +125,8 @@ class InfoTab(QWidget):
         h_motion.addWidget(self._cmb_motion)
 
         self._lbl_motion_badge = QLabel("(modo plano)")
-        self._lbl_motion_badge.setStyleSheet("color: #9e9e9e; font-size: 11px;")
+        set_role(self._lbl_motion_badge, "muted")
+        self._lbl_motion_badge.setStyleSheet("font-size: 11px;")
         h_motion.addWidget(self._lbl_motion_badge)
 
         h_motion.addStretch()
@@ -137,17 +141,18 @@ class InfoTab(QWidget):
 
         grid_time.addWidget(QLabel("Tempo Total Estimado:"), 0, 0)
         self._lbl_total_time = QLabel("--")
-        self._lbl_total_time.setStyleSheet("color: #69f0ae; font-weight: bold; font-size: 13px;")
+        set_role(self._lbl_total_time, "success")
+        self._lbl_total_time.setStyleSheet("font-size: 13px;")
         grid_time.addWidget(self._lbl_total_time, 0, 1)
 
         grid_time.addWidget(QLabel("Tempo em Corte (G1/G2/G3):"), 1, 0)
         self._lbl_cut_time = QLabel("--")
-        self._lbl_cut_time.setStyleSheet("color: #00e5ff; font-weight: bold;")
+        set_role(self._lbl_cut_time, "accent")
         grid_time.addWidget(self._lbl_cut_time, 1, 1)
 
         grid_time.addWidget(QLabel("Tempo em Rápidos (G0):"), 2, 0)
         self._lbl_rapid_time = QLabel("--")
-        self._lbl_rapid_time.setStyleSheet("color: #ff5252;")
+        set_role(self._lbl_rapid_time, "danger")
         grid_time.addWidget(self._lbl_rapid_time, 2, 1)
 
         layout.addWidget(grp_time)
@@ -159,17 +164,17 @@ class InfoTab(QWidget):
 
         grid_dist.addWidget(QLabel("Distância Total:"), 0, 0)
         self._lbl_total_dist = QLabel("--")
-        self._lbl_total_dist.setStyleSheet("font-weight: bold; color: #ffffff;")
+        set_role(self._lbl_total_dist, "strong")
         grid_dist.addWidget(self._lbl_total_dist, 0, 1)
 
         grid_dist.addWidget(QLabel("Percurso de Corte:"), 1, 0)
         self._lbl_cut_dist = QLabel("--")
-        self._lbl_cut_dist.setStyleSheet("color: #00e5ff;")
+        set_role(self._lbl_cut_dist, "accent")
         grid_dist.addWidget(self._lbl_cut_dist, 1, 1)
 
         grid_dist.addWidget(QLabel("Percurso de Rápidos:"), 2, 0)
         self._lbl_rapid_dist = QLabel("--")
-        self._lbl_rapid_dist.setStyleSheet("color: #ff5252;")
+        set_role(self._lbl_rapid_dist, "danger")
         grid_dist.addWidget(self._lbl_rapid_dist, 2, 1)
 
         layout.addWidget(grp_dist)
@@ -214,7 +219,7 @@ class InfoTab(QWidget):
 
         grid_params.addWidget(QLabel("Ferramentas Detectadas:"), 3, 0)
         self._lbl_tools = QLabel("--")
-        self._lbl_tools.setStyleSheet("color: #ffd54f;")
+        set_role(self._lbl_tools, "warning")
         grid_params.addWidget(self._lbl_tools, 3, 1)
 
         layout.addWidget(grp_params)
@@ -311,13 +316,13 @@ class InfoTab(QWidget):
             self._cmb_motion.setEnabled(True)
             self._cmb_motion.setCurrentIndex(1 if self._motion_mode == "workpiece" else 0)
             self._lbl_motion_badge.setText("(4º eixo detectado)")
-            self._lbl_motion_badge.setStyleSheet("color: #80cbc4; font-size: 11px;")
+            update_role(self._lbl_motion_badge, "teal")
         else:
             self._motion_mode = "tool"
             self._cmb_motion.setCurrentIndex(0)
             self._cmb_motion.setEnabled(False)
             self._lbl_motion_badge.setText("(modo plano)")
-            self._lbl_motion_badge.setStyleSheet("color: #9e9e9e; font-size: 11px;")
+            update_role(self._lbl_motion_badge, "muted")
         self._cmb_motion.blockSignals(False)
 
         if self._preview is not None and hasattr(self._preview, "set_sim_motion_mode"):
@@ -375,14 +380,14 @@ class InfoTab(QWidget):
     def _start_sim(self):
         self._is_playing = True
         self._btn_play.setText("⏸ Pausar")
-        self._btn_play.setStyleSheet("background-color: #f57f17; font-weight: bold; font-size: 12px; padding: 6px 14px;")
+        update_role(self._btn_play, "warning")
         self._update_timer_speed()
         self._sim_timer.start()
 
     def _pause_sim(self):
         self._is_playing = False
         self._btn_play.setText("▶ Continuar")
-        self._btn_play.setStyleSheet("background-color: #2e7d32; font-weight: bold; font-size: 12px; padding: 6px 14px;")
+        update_role(self._btn_play, "success")
         self._sim_timer.stop()
 
     def _reset_sim(self):

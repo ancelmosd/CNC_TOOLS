@@ -13,6 +13,7 @@ from core.rotary_wrap import (
     estimate_cylinder_dimensions,
     extract_rotary_trajectories_3d
 )
+from gui.theme import set_role
 
 
 class RotaryTab(QWidget):
@@ -48,17 +49,19 @@ class RotaryTab(QWidget):
             "⚠️ Dica: Se o arquivo tiver comandos G2/G3, converta arcos para G1 antes de aplicar."
         )
         lbl_desc.setWordWrap(True)
-        lbl_desc.setStyleSheet("color: #9e9e9e; font-size: 11px;")
+        set_role(lbl_desc, "muted")
+        lbl_desc.setStyleSheet("font-size: 11px;")
         layout.addWidget(lbl_desc)
 
         # Botão de Estimativa
         btn_est = QPushButton("🔍 Estimar Diâmetro Ideal pelo G-Code")
-        btn_est.setStyleSheet("background-color: #37474f; font-weight: bold; padding: 6px;")
+        set_role(btn_est, "neutral")
         btn_est.clicked.connect(self._estimate)
         layout.addWidget(btn_est)
 
         self._lbl_est_info = QLabel("")
-        self._lbl_est_info.setStyleSheet("color: #80cbc4; font-size: 11px;")
+        set_role(self._lbl_est_info, "teal")
+        self._lbl_est_info.setStyleSheet("font-size: 11px;")
         layout.addWidget(self._lbl_est_info)
 
         # Configurações do Cilindro
@@ -96,14 +99,16 @@ class RotaryTab(QWidget):
         h_btn_layout = QHBoxLayout()
 
         self._btn_preview_rotary = QPushButton("👁️ Pré-visualizar no Cilindro 3D")
-        self._btn_preview_rotary.setStyleSheet("background-color: #1565c0; font-weight: bold; font-size: 12px; padding: 10px;")
+        set_role(self._btn_preview_rotary, "primary")
+        self._btn_preview_rotary.setStyleSheet("font-size: 12px;")
         self._btn_preview_rotary.clicked.connect(self._preview_rotary)
         h_btn_layout.addWidget(self._btn_preview_rotary)
 
         layout.addLayout(h_btn_layout)
 
         self._btn_apply = QPushButton("🔄 Aplicar Wrapper de 4º Eixo ao G-Code")
-        self._btn_apply.setStyleSheet("background-color: #00695c; font-weight: bold; font-size: 13px; padding: 12px;")
+        set_role(self._btn_apply, "teal")
+        self._btn_apply.setStyleSheet("font-size: 13px;")
         self._btn_apply.clicked.connect(self._apply)
         layout.addWidget(self._btn_apply)
 

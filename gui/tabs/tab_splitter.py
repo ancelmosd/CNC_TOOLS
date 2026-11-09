@@ -10,6 +10,7 @@ from PySide6.QtWidgets import (
     QFileDialog, QMessageBox, QGroupBox, QScrollArea, QFrame
 )
 from core.splitter import split_by_lines, split_by_tool_change, split_by_layer, save_parts
+from gui.theme import set_role
 
 
 class SplitterTab(QWidget):
@@ -81,12 +82,14 @@ class SplitterTab(QWidget):
 
         # Botão Dividir
         btn_split = QPushButton("✂️ Dividir e Salvar Partes...")
-        btn_split.setStyleSheet("background-color: #ad1457; font-weight: bold; font-size: 13px; padding: 10px;")
+        set_role(btn_split, "pink")
+        btn_split.setStyleSheet("font-size: 13px;")
         btn_split.clicked.connect(self._apply)
         layout.addWidget(btn_split)
 
         self._lbl_result = QLabel("")
-        self._lbl_result.setStyleSheet("color: #b0bec5; font-size: 11px;")
+        set_role(self._lbl_result, "muted")
+        self._lbl_result.setStyleSheet("font-size: 11px;")
         self._lbl_result.setWordWrap(True)
         layout.addWidget(self._lbl_result)
 
